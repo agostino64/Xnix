@@ -1,10 +1,12 @@
-#include <stdio.h>
+#include "stdio.h"
 #include <arch/i686/io.h>
 
 #include <stdarg.h>
 #include <stdbool.h>
 
 #include <hal/vfs.h>
+
+#include <drivers/kbd.h>
 
 void fputc(char c, fd_t file)
 {

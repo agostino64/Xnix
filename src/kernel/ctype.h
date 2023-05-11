@@ -4,3 +4,4 @@
 
 bool islower(char chr);
 char toupper(char chr);
+int isdigit(char c);

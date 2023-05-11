@@ -1,5 +1,5 @@
 TARGET_ASMFLAGS += -f elf
-TARGET_CFLAGS += -g -ffreestanding -nostdlib -I.
+TARGET_CFLAGS += -ffreestanding -nostdlib -L. -ltkeyboard -I.
 TARGET_LIBS += -lgcc
 TARGET_LINKFLAGS += -T linker.ld -nostdlib
 
@@ -21,9 +21,13 @@ HEADERS_ASM = $(wildcard *.inc) \
 			  $(wildcard */*/*/*.inc)
 
 SOURCES_ASM = $(wildcard *.asm) \
+			  $(wildcard *.S) \
 			  $(wildcard */*.asm) \
+			  $(wildcard */*.S) \
 			  $(wildcard */*/*.asm) \
-			  $(wildcard */*/*/*.asm)
+			  $(wildcard */*/*.S) \
+			  $(wildcard */*/*/*.asm) \
+			  $(wildcard */*/*/*.S)
 
 
 OBJECTS_ASM = $(patsubst %.asm, $(BUILD_DIR)/kernel/asm/%.obj, $(SOURCES_ASM))
@@ -32,11 +36,11 @@ OBJECTS_ASM = $(patsubst %.asm, $(BUILD_DIR)/kernel/asm/%.obj, $(SOURCES_ASM))
 
 all: kernel
 
-kernel: $(BUILD_DIR)/tkernel.bin
+kernel: $(BUILD_DIR)/kernel.bin
 
-$(BUILD_DIR)/tkernel.bin: $(OBJECTS_ASM) $(OBJECTS_C)
-	@$(TARGET_LD) $(TARGET_LINKFLAGS) -Wl,-Map=$(BUILD_DIR)/tkernel.map -o $@ $^ $(TARGET_LIBS)
-	@echo "--> Created:  tkernel.bin"
+$(BUILD_DIR)/kernel.bin: $(OBJECTS_ASM) $(OBJECTS_C)
+	@$(TARGET_LD) $(TARGET_LINKFLAGS) -Wl,-Map=$(BUILD_DIR)/kernel.map -o $@ $^ $(TARGET_LIBS)
+	@echo "--> Created:  kernel.bin"
 
 $(BUILD_DIR)/kernel/c/%.obj: %.c $(HEADERS_C)
 	@mkdir -p $(@D)
@@ -49,4 +53,4 @@ $(BUILD_DIR)/kernel/asm/%.obj: %.asm $(HEADERS_ASM)
 	@echo "--> Compiled: " $<
 
 clean:
-	rm -f $(BUILD_DIR)/tkernel.bin
+	rm -f $(BUILD_DIR)/kernel.bin

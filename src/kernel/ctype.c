@@ -9,3 +9,9 @@ char toupper(char chr)
 {
     return islower(chr) ? (chr - 'a' + 'A') : chr;
 }
+
+int isdigit(char c)
+{
+    return (c >= '0' && c <= '9');
+}
+

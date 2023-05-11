@@ -30,7 +30,7 @@ void __attribute__((cdecl)) start(uint16_t bootDrive)
 
     // load kernel
     printf("Init Kernel...\r\n");
-    FAT_File* fd = FAT_Open(&disk, "/boot/tkernel.bin");
+    FAT_File* fd = FAT_Open(&disk, "/boot/kernel");
     uint32_t read;
     uint8_t* kernelBuffer = Kernel;
     while ((read = FAT_Read(&disk, fd, MEMORY_LOAD_SIZE, KernelLoadBuffer)))

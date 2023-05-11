@@ -30,7 +30,7 @@ ebr_drive_number:           db 0                    ; 0x00 floppy, 0x80 hdd, use
                             db 0                    ; reserved
 ebr_signature:              db 29h
 ebr_volume_id:              db 12h, 34h, 56h, 78h   ; serial number, value doesn't matter
-ebr_volume_label:           db 'tOS-GCC-v13'        ; 11 bytes, padded with spaces
+ebr_volume_label:           db 'XnixOS-beta'        ; 11 bytes, padded with spaces
 ebr_system_id:              db 'FAT12   '           ; 8 bytes
 
 ;
@@ -106,7 +106,7 @@ start:
     mov bx, buffer                      ; es:bx = buffer
     call disk_read
 
-    ; search for tkernel.bin
+    ; search for kernel
     xor bx, bx
     mov di, buffer
 
