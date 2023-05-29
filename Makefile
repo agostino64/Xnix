@@ -15,11 +15,11 @@ $(BUILD_DIR)/%.asm.o: %.asm
 	
 
 $(BUILD_DIR)/%.c.o: %.c
-	@make -C ./lib
 	@$(CC) $(CFLAGS) -I include/ -L build/ -lxnix -c $< -o $@
 	@echo "--> Compiled: " $<
 
 link:
+	@make -C ./lib
 	@$(LD) $(LDFLAGS) -o $(BUILD_DIR)/$(OUTELF) $(OBJECTS_ASM) $(OBJECTS_C) -L build/ -lxnix
 	@echo "--> Created:  XnixOS"
 	
