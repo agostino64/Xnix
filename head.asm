@@ -14,7 +14,7 @@ MultiBootHeader:
   dd CHECKSUM    ; Checksum
 
 loader:
-  mov esp, 0x200000  ; Place stack at 2MB boundary
+  mov esp, 0x20000   ; Place stack at 16KB boundary
   push eax           ; Push Multiboot Magic number onto the stack
   push ebx           ; Push address of Multiboot structure onto the stack
   call kmain         ; Call the main function of the C kernel

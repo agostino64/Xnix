@@ -49,14 +49,24 @@ unsigned char kbdus[128] =
 static uint32_t keyboard_buffer_pos = 0;
 
 char kbd_interrupt(unsigned char *data)
-{
-  do
-    *data = i686_inb(0x64);
-  while ((*data & 0x01) == 0);
-    *data = i686_inb(0x60);
-
+{ 
+  unsigned char status;
+  *data = 0;
+  
+  while (1)
+  {
+    status = i686_inb(0x64);
+    if (status & 0x01)
+    {
+      *data = i686_inb(0x60);
+      break;
+    }
+  }
+  
   if (*data >= sizeof(kbdus) / sizeof(kbdus[0]))
-      return 0;
+  {
+    return 0;
+  }
 
   return kbdus[*data];	
 }
