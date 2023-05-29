@@ -64,9 +64,7 @@ char kbd_interrupt(unsigned char *data)
   }
   
   if (*data >= sizeof(kbdus) / sizeof(kbdus[0]))
-  {
     return 0;
-  }
 
   return kbdus[*data];	
 }
