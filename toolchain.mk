@@ -1,14 +1,14 @@
 ASM = nasm
 ASMFLAGS= -f elf
 
-CC = i686-elf-gcc
+CC = ../.toolchains/i686-elf/bin/i686-elf-gcc
 LLIBS = -lgcc
-CFLAGS = -g -ffreestanding -nostdlib -Wall -Werror -nostdinc
+CFLAGS = -g -ffreestanding -nostdlib -Wall -nostdinc
 
-LD = i686-elf-ld
+LD = ../.toolchains/i686-elf/bin/i686-elf-ld
 LDFLAGS = -T linker.ld -nostdlib
 
-AR = i686-elf-ar
+AR = ../.toolchains/i686-elf/bin/i686-elf-ar
 ARFLAGS= rcs
 
 OUTELF = XnixOS

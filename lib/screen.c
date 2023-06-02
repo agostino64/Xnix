@@ -113,20 +113,209 @@ void putc(char c, uint8_t color)
     setcursor(g_ScreenX, g_ScreenY);
 }
 
-void kprint(const char* str)
-{
-    while(*str)
-    {
-        putc(*str, 0x7); // (0x7) blanco sobre negro
-        str++;
-    }
-}
-
-void kprint_color(const char* str, uint8_t color)
+void puts(const char* str, uint8_t color)
 {
     while(*str)
     {
         putc(*str, color);
         str++;
     }
+}
+
+#define PRINTF_STATE_NORMAL         0
+#define PRINTF_STATE_LENGTH         1
+#define PRINTF_STATE_LENGTH_SHORT   2
+#define PRINTF_STATE_LENGTH_LONG    3
+#define PRINTF_STATE_SPEC           4
+
+#define PRINTF_LENGTH_DEFAULT       0
+#define PRINTF_LENGTH_SHORT_SHORT   1
+#define PRINTF_LENGTH_SHORT         2
+#define PRINTF_LENGTH_LONG          3
+#define PRINTF_LENGTH_LONG_LONG     4
+
+const char g_HexChars[] = "0123456789abcdef";
+
+void printf_unsigned(unsigned long number, int radix)
+{
+    char buffer[32];
+    int pos = 0;
+
+    // convert number to ASCII
+    do 
+    {
+        unsigned long rem = number % radix;
+        number /= radix;
+        buffer[pos++] = g_HexChars[rem];
+    } while (number > 0);
+
+    // print number in reverse order
+    while (--pos >= 0)
+        putc(buffer[pos], 0x7);
+}
+
+void printf_signed(long number, int radix)
+{
+    if (number < 0)
+    {
+        putc('-', 0x7);
+        printf_unsigned(-number, radix);
+    }
+    else printf_unsigned(number, radix);
+}
+
+void vprintf(const char* fmt, va_list args)
+{
+    int state = PRINTF_STATE_NORMAL;
+    int length = PRINTF_LENGTH_DEFAULT;
+    int radix = 10;
+    bool sign = false;
+    bool number = false;
+
+    while (*fmt)
+    {
+        switch (state)
+        {
+            case PRINTF_STATE_NORMAL:
+                switch (*fmt)
+                {
+                    case '%':   state = PRINTF_STATE_LENGTH;
+                                break;
+                    default:    putc(*fmt, DEFAULT_COLOR);
+                                break;
+                }
+                break;
+
+            case PRINTF_STATE_LENGTH:
+                switch (*fmt)
+                {
+                    case 'h':   length = PRINTF_LENGTH_SHORT;
+                                state = PRINTF_STATE_LENGTH_SHORT;
+                                break;
+                    case 'l':   length = PRINTF_LENGTH_LONG;
+                                state = PRINTF_STATE_LENGTH_LONG;
+                                break;
+                    default:    goto PRINTF_STATE_SPEC_;
+                }
+                break;
+
+            case PRINTF_STATE_LENGTH_SHORT:
+                if (*fmt == 'h')
+                {
+                    length = PRINTF_LENGTH_SHORT_SHORT;
+                    state = PRINTF_STATE_SPEC;
+                }
+                else goto PRINTF_STATE_SPEC_;
+                break;
+
+            case PRINTF_STATE_LENGTH_LONG:
+                if (*fmt == 'l')
+                {
+                    length = PRINTF_LENGTH_LONG_LONG;
+                    state = PRINTF_STATE_SPEC;
+                }
+                else goto PRINTF_STATE_SPEC_;
+                break;
+
+            case PRINTF_STATE_SPEC:
+            PRINTF_STATE_SPEC_:
+                switch (*fmt)
+                {
+                    case 'c':   putc((char)va_arg(args, int), DEFAULT_COLOR);
+                                break;
+
+                    case 's':   
+                                puts(va_arg(args, const char*), DEFAULT_COLOR);
+                                break;
+
+                    case '%':   putc('%', DEFAULT_COLOR);
+                                break;
+
+                    case 'd':
+                    case 'i':   radix = 10; sign = true; number = true;
+                                break;
+
+                    case 'u':   radix = 10; sign = false; number = true;
+                                break;
+
+                    case 'X':
+                    case 'x':
+                    case 'p':   radix = 16; sign = false; number = true;
+                                break;
+
+                    case 'o':   radix = 8; sign = false; number = true;
+                                break;
+
+                    // ignore invalid spec
+                    default:    break;
+                }
+
+                if (number)
+                {
+                    if (sign)
+                    {
+                        switch (length)
+                        {
+                        case PRINTF_LENGTH_SHORT_SHORT:
+                        case PRINTF_LENGTH_SHORT:
+                        case PRINTF_LENGTH_DEFAULT:     printf_signed(va_arg(args, int), radix);
+                                                        break;
+
+                        case PRINTF_LENGTH_LONG:        printf_signed(va_arg(args, long), radix);
+                                                        break;
+
+                        case PRINTF_LENGTH_LONG_LONG:   printf_signed(va_arg(args, long), radix);
+                                                        break;
+                        }
+                    }
+                    else
+                    {
+                        switch (length)
+                        {
+                        case PRINTF_LENGTH_SHORT_SHORT:
+                        case PRINTF_LENGTH_SHORT:
+                        case PRINTF_LENGTH_DEFAULT:     printf_unsigned(va_arg(args, unsigned int), radix);
+                                                        break;
+                                                        
+                        case PRINTF_LENGTH_LONG:        printf_unsigned(va_arg(args, unsigned  long), radix);
+                                                        break;
+
+                        case PRINTF_LENGTH_LONG_LONG:   printf_unsigned(va_arg(args, unsigned  long), radix);
+                                                        break;
+                        }
+                    }
+                }
+
+                // reset state
+                state = PRINTF_STATE_NORMAL;
+                length = PRINTF_LENGTH_DEFAULT;
+                radix = 10;
+                sign = false;
+                number = false;
+                break;
+        }
+
+        fmt++;
+    }
+}
+
+void printk(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+}
+
+void printk_buff(const char* msg, const void* buffer, uint32_t count)
+{
+    const uint8_t* u8Buffer = (const uint8_t*)buffer;
+    
+    puts(msg, DEFAULT_COLOR);
+    for (uint16_t i = 0; i < count; i++)
+    {
+        putc(g_HexChars[u8Buffer[i] >> 4], DEFAULT_COLOR);
+        putc(g_HexChars[u8Buffer[i] & 0xF], DEFAULT_COLOR);
+    }
+    puts("\n", DEFAULT_COLOR);
 }

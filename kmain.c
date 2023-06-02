@@ -2,9 +2,11 @@
 #include <libstr.h>
 #include <kbd.h>
 
+#include <hal.h>
+
 void start_console(char *k_input)
 {  
-    kprint_color(">> ", 0x8);
+    printk(">> ");
     kbd_init(k_input, BUFFER_SIZE);
     if (k_strcmp(k_input, "") == 0)
       start_console(k_input);
@@ -14,16 +16,20 @@ void kmain()
 {
     char k_input[BUFFER_SIZE];
     
-    kclear_screen();
+    HAL_Initialize();
     
-    kprint_color("Welcome to XnixOS!\n\n", 0x3);
+    kclear_screen();
+
+    printk("Welcome to XnixOS!\n\n");
     while(1)
     {
       start_console(k_input);
       if (k_strcmp(k_input, "shutdown") == 0)
-          kprint("apagar!\n");
+          printk("apagar! %s\n", k_input);
       else if (k_strcmp(k_input, "reboot") == 0)
-          kprint("reiniciar!\n");
+          printk("reiniciar!\n");
+      else if (k_strcmp(k_input, "panic") == 0)
+          printk("Kernel in panic!\n");
       else 
           cmd_init(k_input);
     }

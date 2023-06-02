@@ -29,3 +29,8 @@ run:
 clean:
 	@rm -rf $(BUILD_DIR)
 
+mkiso:
+	@mkdir -p isodir/boot/grub
+	@cp -r grub.cfg isodir/boot/grub/
+	@cp -r build/XnixOS isodir/boot/
+	@grub2-mkrescue -o XnixOS.iso isodir
