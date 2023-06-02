@@ -1,4 +1,4 @@
-#define XNIX_VERSION "2.0.2"
+#define XNIX_VERSION "2.0.3"
 #define BUILD_GCC __GNUC__
 #define BUILD_GCC_VERSION __GNUC_MINOR__
 #define BUILD_GCC_PATCH __GNUC_PATCHLEVEL__

@@ -15,6 +15,7 @@ char *k_strchr(const char *s, int c);
 size_t k_strspn(const char *s, const char *accept);
 char *k_strpbrk(const char *s, const char *accept);
 char *k_strtok(char *str, const char *delim);
+char* k_strdup(const char* str);
 
 #endif
 

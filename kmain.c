@@ -1,16 +1,9 @@
 #include <screen.h>
 #include <libstr.h>
 #include <kbd.h>
+#include <cmd.h>
 
 #include <hal.h>
-
-void start_console(char *k_input)
-{  
-    printk(">> ");
-    kbd_init(k_input, BUFFER_SIZE);
-    if (k_strcmp(k_input, "") == 0)
-      start_console(k_input);
-}
 
 void kmain()
 {
@@ -20,7 +13,7 @@ void kmain()
     
     kclear_screen();
 
-    printk("Welcome to XnixOS!\n\n");
+    puts("Welcome to XnixOS!\n\n", 0x3);
     while(1)
     {
       start_console(k_input);
@@ -30,7 +23,7 @@ void kmain()
           printk("reiniciar!\n");
       else if (k_strcmp(k_input, "panic") == 0)
           printk("Kernel in panic!\n");
-      else 
+      else
           cmd_init(k_input);
     }
 }
