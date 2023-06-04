@@ -1,114 +1,189 @@
 #include <libstr.h>
+#include <stddef.h>
 
-size_t k_strlen(const char *str) {
-    size_t len = 0;
-    while (str[len] != '\0') {
-        len++;
+/**
+ * Calcula la longitud de una cadena.
+ * @param str La cadena de entrada.
+ * @return El número de caracteres en la cadena (sin incluir el terminador nulo).
+ */
+size_t k_strlen(const char* str) {
+    const char* p = str;
+    while (*p != '\0') {
+        ++p;
     }
-    return len;
+    return p - str;
 }
 
-void k_strcpy(char *dest, const char *src) {
-    size_t i = 0;
-    while (src[i] != '\0') {
-        dest[i] = src[i];
-        i++;
-    }
-    dest[i] = '\0';
+/**
+ * Copia una cadena de origen en una cadena de destino.
+ * @param dest La cadena de destino.
+ * @param src La cadena de origen.
+ */
+void k_strcpy(char* dest, const char* src) {
+    while ((*dest++ = *src++) != '\0') {}
 }
 
-void k_strncpy(char *dest, const char *src, size_t n) {
+/**
+ * Copia los primeros 'n' caracteres de una cadena de origen en una cadena de destino.
+ * Si la cadena de origen es más corta que 'n', se rellena la cadena de destino con terminadores nulos adicionales.
+ * @param dest La cadena de destino.
+ * @param src La cadena de origen.
+ * @param n El número máximo de caracteres a copiar.
+ */
+void k_strncpy(char* dest, const char* src, size_t n) {
     size_t i;
-    for (i = 0; i < n && src[i] != '\0'; i++) {
+    for (i = 0; i < n && src[i] != '\0'; ++i) {
         dest[i] = src[i];
     }
-    for ( ; i < n; i++) {
+    for (; i < n; ++i) {
         dest[i] = '\0';
     }
 }
 
-void k_strcat(char *dest, const char *src) {
+/**
+ * Concatena una cadena de origen al final de una cadena de destino.
+ * @param dest La cadena de destino.
+ * @param src La cadena de origen.
+ */
+void k_strcat(char* dest, const char* src) {
+    size_t dest_len = k_strlen(dest);
+    while (*src != '\0') {
+        dest[dest_len++] = *src++;
+    }
+    dest[dest_len] = '\0';
+}
+
+/**
+ * Concatena los primeros 'n' caracteres de una cadena de origen al final de una cadena de destino.
+ * Si la cadena de origen es más corta que 'n', se rellena la cadena de destino con un terminador nulo adicional.
+ * @param dest La cadena de destino.
+ * @param src La cadena de origen.
+ * @param n El número máximo de caracteres a concatenar.
+ */
+void k_strncat(char* dest, const char* src, size_t n) {
     size_t dest_len = k_strlen(dest);
     size_t i;
-    for (i = 0; src[i] != '\0'; i++) {
+    for (i = 0; i < n && src[i] != '\0'; ++i) {
         dest[dest_len + i] = src[i];
     }
     dest[dest_len + i] = '\0';
 }
 
-void k_strncat(char *dest, const char *src, size_t n) {
-    size_t dest_len = k_strlen(dest);
-    size_t i;
-    for (i = 0; i < n && src[i] != '\0'; i++) {
-        dest[dest_len + i] = src[i];
+/**
+ * Compara dos cadenas lexicográficamente.
+ * @param s1 La primera cadena a comparar.
+ * @param s2 La segunda cadena a comparar.
+ * @return Un valor negativo si s1 es menor que s2, un valor positivo si s1 es mayor que s2, o 0 si son iguales.
+ */
+int k_strcmp(const char* s1, const char* s2) {
+    while (*s1 != '\0' && *s1 == *s2) {
+        ++s1;
+        ++s2;
     }
-    dest[dest_len + i] = '\0';
+    return (unsigned char)*s1 - (unsigned char)*s2;
 }
 
-int k_strcmp(const char *s1, const char *s2) {
+/**
+ * Copia un bloque de memoria de origen a un bloque de memoria de destino.
+ * @param dest El bloque de memoria de destino.
+ * @param src El bloque de memoria de origen.
+ * @param n El número de bytes a copiar.
+ * @return Un puntero al bloque de memoria de destino.
+ */
+void* k_memcpy(void* dest, const void* src, size_t n) {
+    unsigned char* cdest = (unsigned char*)dest;
+    const unsigned char* csrc = (const unsigned char*)src;
     size_t i;
-    for (i = 0; s1[i] == s2[i]; i++) {
-        if (s1[i] == '\0') {
-            return 0;
-        }
-    }
-    return ((unsigned char) s1[i] < (unsigned char) s2[i]) ? -1 : 1;
-}
-
-void *k_memcpy(void *dest, const void *src, size_t n) {
-    char *cdest = (char *) dest;
-    const char *csrc = (const char *) src;
-    size_t i;
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n; ++i) {
         cdest[i] = csrc[i];
     }
     return dest;
 }
 
-void k_memset(void *ptr, int value, size_t num) {
-    unsigned char *p = ptr;
-    unsigned char val = (unsigned char) value;
+/**
+ * Establece un bloque de memoria con un valor específico.
+ * @param ptr El puntero al bloque de memoria.
+ * @param value El valor a establecer.
+ * @param num El número de bytes a establecer.
+ */
+void k_memset(void* ptr, int value, size_t num) {
+    unsigned char* p = (unsigned char*)ptr;
+    unsigned char val = (unsigned char)value;
     size_t i;
-    for (i = 0; i < num; i++) {
+    for (i = 0; i < num; ++i) {
         p[i] = val;
     }
 }
 
-char *k_strchr(const char *s, int c) {
-    while (*s != (char) c) {
-        if (!*s++) {
-            return NULL;
+/**
+ * Busca la primera aparición de un carácter en una cadena.
+ * @param s La cadena de entrada.
+ * @param c El carácter a buscar.
+ * @return Un puntero a la primera aparición de 'c' en 's', o NULL si no se encuentra.
+ */
+char* k_strchr(const char* s, int c) {
+    while (*s != '\0') {
+        if (*s == c) {
+            return (char*)s;
         }
+        ++s;
     }
-    return (char *) s;
-}
-
-size_t k_strspn(const char *s, const char *accept) {
-    size_t count = 0;
-
-    while (*s && k_strchr(accept, *s++)) {
-        count++;
-    }
-
-    return count;
-}
-
-char *k_strpbrk(const char *s, const char *accept) {
-    const char *p = s;
-
-    while (*p) {
-        if (k_strchr(accept, *p)) {
-            return (char *) p;
-        }
-        p++;
-    }
-
     return NULL;
 }
 
-char *k_strtok(char *str, const char *delim) {
-    static char *last_token = NULL;
-    char *token = NULL;
+/**
+ * Calcula la longitud del segmento inicial de una cadena que contiene solo caracteres presentes en otra cadena.
+ * @param s La cadena de entrada.
+ * @param accept La cadena de caracteres válidos.
+ * @return El número de caracteres consecutivos en 's' que están presentes en 'accept'.
+ */
+size_t k_strspn(const char* s, const char* accept) {
+    size_t count = 0;
+    const char* p;
+    while (*s != '\0') {
+        for (p = accept; *p != '\0'; ++p) {
+            if (*s == *p) {
+                break;
+            }
+        }
+        if (*p == '\0') {
+            return count;
+        }
+        ++count;
+        ++s;
+    }
+    return count;
+}
+
+/**
+ * Busca la primera aparición de cualquier carácter en una cadena en otra cadena.
+ * @param s La cadena de entrada.
+ * @param accept La cadena de caracteres a buscar.
+ * @return Un puntero a la primera aparición de cualquier carácter de 'accept' en 's', o NULL si no se encuentra.
+ */
+char* k_strpbrk(const char* s, const char* accept) {
+    const char* p;
+    while (*s != '\0') {
+        for (p = accept; *p != '\0'; ++p) {
+            if (*s == *p) {
+                return (char*)s;
+            }
+        }
+        ++s;
+    }
+    return NULL;
+}
+
+/**
+ * Divide una cadena en tokens utilizando un conjunto de delimitadores.
+ * @param str La cadena de entrada.
+ * @param delim Los delimitadores.
+ * @return Un puntero al siguiente token encontrado en 'str', o NULL si no hay más tokens.
+ *         El puntero se puede utilizar en llamadas posteriores para continuar la tokenización.
+ */
+char* k_strtok(char* str, const char* delim) {
+    static char* last_token = NULL;
+    char* token = NULL;
 
     if (str != NULL) {
         last_token = str;

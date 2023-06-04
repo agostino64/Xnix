@@ -8,6 +8,7 @@ void exec_cmd(char *input, Cmd *cmds, int num_cmds);
 void cmd_init(char *input);
 
 // commands
-void print_help();
-void print_version();
-void print_acsii();
+void help_func();
+void version_func();
+void acsii_func();
+void init_tty(char *input);

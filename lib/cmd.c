@@ -28,16 +28,25 @@ void exec_cmd(char *input, Cmd *cmds, int num_cmds)
 void cmd_init(char *input)
 {
   Cmd cmds[] = {
-    { "help", print_help },
-    { "version", print_version },
-    { "xnix", print_acsii },
+    { "help", help_func },
+    { "version", version_func },
+    { "xnix", acsii_func },
     { "clear", kclear_screen }
   };
   
   exec_cmd(input, cmds, sizeof(cmds) / sizeof(cmds[0]));
 }
 
-void print_help()
+void init_tty(char *input)
+{
+    while(1)
+    {
+      start_console(input);
+      cmd_init(input);
+    }
+}
+
+void help_func()
 {
   printk("This system is for x86 (32bits)\n\n");
   printk("Write: \'version\' for version\n");
@@ -45,12 +54,12 @@ void print_help()
   printk("Write: \'clear\' for clean\n");
 }
 
-void print_version()
+void version_func()
 {
   printk("XnixOS version %s (GCC %d.%d.%d) %s %s\n", XNIX_VERSION, BUILD_GCC, BUILD_GCC_VERSION, BUILD_GCC_PATCH, BUILD_DATE, BUILD_TIME);
 }
 
-void print_acsii()
+void acsii_func()
 {
   char *ascii_xnix =
   "          ..        .  ..                         \n"
