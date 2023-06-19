@@ -5,5 +5,5 @@
 
 #define BUFFER_SIZE 256
 
-char kbd_interrupt(unsigned char *data);
+uint8_t kbd_interrupt(uint8_t *keycode);
 void kbd_init(char *buffer, size_t buffer_size);

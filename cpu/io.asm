@@ -13,3 +13,7 @@ i686_inb:
     xor eax, eax
     in al, dx
     ret
+    
+global enable_interrupt
+    [bits 32]
+    sti

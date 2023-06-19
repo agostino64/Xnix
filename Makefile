@@ -1,33 +1,31 @@
 include toolchain.mk
 
-SOURCES_ASM := $(wildcard *.asm)
-OBJECTS_ASM := $(patsubst %.asm, $(BUILD_DIR)/%.asm.o, $(SOURCES_ASM))
+SOURCES_ASM := $(wildcard boot/*.asm kernel/*.asm drivers/*.asm cpu/*.asm)
+OBJECTS_ASM := $(patsubst %.asm, %.asm.o, $(SOURCES_ASM))
 
-SOURCES_C := $(wildcard *.c)		
-OBJECTS_C := $(patsubst %.c, $(BUILD_DIR)/%.c.o, $(SOURCES_C))
+SOURCES_C := $(wildcard boot/*.c kernel/*.c drivers/*.c cpu/*.c)
+OBJECTS_C := $(patsubst %.c, %.c.o, $(SOURCES_C))
 
 all: $(OBJECTS_ASM) $(OBJECTS_C) link
 
-$(BUILD_DIR)/%.asm.o: %.asm
-	@mkdir -p $(@D)
+%.asm.o: %.asm
 	@$(ASM) $(ASMFLAGS) -o $@ $<
 	@echo "--> Compiled: " $<
-	
 
-$(BUILD_DIR)/%.c.o: %.c
-	@$(CC) $(CFLAGS) -I include/ -L build/ -lxnix -c $< -o $@
+%.c.o: %.c
+	@$(CC) $(CFLAGS) -I include/ -c $< -o $@
 	@echo "--> Compiled: " $<
 
 link:
-	@make -C ./lib
-	@$(LD) $(LDFLAGS) -o $(BUILD_DIR)/$(OUTELF) $(OBJECTS_ASM) $(OBJECTS_C) -L build/ -lxnix
+	@mkdir -p $(BUILD_DIR)
+	@$(LD) $(LDFLAGS) -o $(BUILD_DIR)/$(OUTELF) $(OBJECTS_ASM) $(OBJECTS_C)
 	@echo "--> Created:  XnixOS"
-	
+
 run:
-	@qemu-system-i386 --kernel $(BUILD_DIR)/$(OUTELF)
+	@qemu-system-i386 -kernel build/XnixOS
 
 clean:
-	@rm -rf $(BUILD_DIR)
+	@rm -rf build boot/*.o drivers/*.o cpu/*.o kernel/*.o
 
 mkiso:
 	@mkdir -p isodir/boot/grub

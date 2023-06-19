@@ -6,11 +6,23 @@
 #include <version.h>
 
 void start_console(char *input)
-{  
+{
+  /*
     puts(">> ", 0x8);
     kbd_init(input, BUFFER_SIZE);
     if (k_strcmp(input, "") == 0)
       start_console(input);
+  */
+
+  while (1)
+  {
+    puts(">> ", 0x8);
+    kbd_init(input, BUFFER_SIZE);
+    if (k_strcmp(input, "") == 0)
+      continue;
+    else
+      break;
+  }
 }
 
 void exec_cmd(char *input, Cmd *cmds, int num_cmds)
@@ -33,7 +45,7 @@ void cmd_init(char *input)
     { "xnix", acsii_func },
     { "clear", kclear_screen }
   };
-  
+
   exec_cmd(input, cmds, sizeof(cmds) / sizeof(cmds[0]));
 }
 

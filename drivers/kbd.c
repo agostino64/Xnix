@@ -1,10 +1,16 @@
 #include <stdbool.h>
+#include <stdint.h>
 #include <kbd.h>
 #include <screen.h>
 #include <libstr.h>
 #include <io.h>
 
-// mapa de teclas del teclado
+#define KBD_DATA 0x60
+#define KBD_STATUS 0x64
+
+static uint32_t keyboard_buffer_pos = 0;
+static bool caps_lock_state = false;
+
 unsigned char kbdus[128] =
 {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
@@ -20,7 +26,7 @@ unsigned char kbdus[128] =
   '*',
     0,	/* Alt */
   ' ',	/* Space bar */
-    0,	/* Caps lock */
+    0x3a,	/* Caps lock */
     0,	/* 59 - F1 key ... > */
     0,   0,   0,   0,   0,   0,   0,   0,
     0,	/* < ... F10 */
@@ -45,43 +51,44 @@ unsigned char kbdus[128] =
     0,	/* All other keys are undefined */
 };
 
-// Buffer del teclado
-static uint32_t keyboard_buffer_pos = 0;
-
-char kbd_interrupt(unsigned char *data)
-{ 
-  unsigned char status;
-  *data = 0;
+uint8_t kbd_interrupt(uint8_t *keycode)
+{
+  uint8_t status;
+  *keycode = 0;
   
   while (1)
   {
-    status = i686_inb(0x64);
+    status = i686_inb(KBD_STATUS);
     if (status & 0x01)
     {
-      *data = i686_inb(0x60);
+      *keycode = i686_inb(KBD_DATA);  
+      if (*keycode == 0x3a)
+        caps_lock_state = !caps_lock_state;
       break;
     }
   }
   
-  if (*data >= sizeof(kbdus) / sizeof(kbdus[0]))
+  if (*keycode >= sizeof(kbdus) / sizeof(kbdus[0]))
     return 0;
-
-  return kbdus[*data];	
+  return kbdus[*keycode];
 }
 
 // Función para leer una línea completa del teclado
 void kbd_interrupt_handler(char *buffer, size_t buffer_size)
 {
-    unsigned char keycode;
+    uint8_t keycode;
     keyboard_buffer_pos = 0;
     
     while (1)
     {
-        char c = kbd_interrupt(&keycode);
+        uint8_t c = kbd_interrupt(&keycode);
 
-        // print keys on pressed
-        if (c) 
+        if (c && c != 0x3a) // no imprime 0x3a
+        {
+          if (caps_lock_state && c >= 'a' && c <= 'z')
+            c -= 32;
           putc(c, 0x7);
+        }
 
         if (c == '\n')
         {
@@ -90,13 +97,15 @@ void kbd_interrupt_handler(char *buffer, size_t buffer_size)
         }
         else if (c >= ' ' && keyboard_buffer_pos < buffer_size - 1)
         {
-            buffer[keyboard_buffer_pos] = c;
-            keyboard_buffer_pos++;
+          buffer[keyboard_buffer_pos] = c;
+          keyboard_buffer_pos++;
         }
         else if (keyboard_buffer_pos >= buffer_size - 1)
         {
             // buffer overflow detected
-            buffer[buffer_size - 1] = '\0';
+            buffer[buffer_size - 1] = '\0'; // cuando se sobrepase el tamaño del bufer, se corta
+            k_memset(buffer, 0x0, buffer_size); // no guarda los datos del bufer
+            puts("\nbuffer full!\n", 0x04);
             return;
         }
     }

@@ -3,13 +3,9 @@
 #include <kbd.h>
 #include <cmd.h>
 
-#include <hal.h>
-
 void kmain()
 {
     char k_input[BUFFER_SIZE];
-    
-    HAL_Initialize();
   
     kclear_screen();
 
