@@ -12,7 +12,8 @@ align 4
   dd CHECKSUM    ; Checksum
 
 _start:
-  jmp call_kernel  
+  jmp call_kernel
+  jmp $
   
 call_kernel:
   mov esp, 0x20000   ; Place stack at 128KB boundary
