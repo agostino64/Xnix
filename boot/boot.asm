@@ -1,7 +1,7 @@
 ;*
-;*  xnix/boot/boot.asm
+;*  XnixOS
 ;*
-;*  Copyright (C) 2023  Agustin Gutierrez
+;*  xnix/boot/boot.asm
 ;*
 
 ; These are the multiboot macroes, they are used to configure how GRUB
