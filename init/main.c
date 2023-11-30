@@ -1,7 +1,7 @@
 /*
  *  XnixOS
  *
- *  xnix/drivers/vga.c
+ *  xnix/init/main.c
  */
 
 #include <xnix/vga.h>
@@ -20,9 +20,10 @@ static char* cmd;
 void start_kernel(struct multiboot *mbd, uint32_t initial_stack)
 {
     initial_esp = initial_stack; //Set up for stack switch
-    cli(); // dissable interrupts
     
     clear_vga();
+    
+    cli(); // dissable interrupts
     
     isr_init();
     init_gdt();
