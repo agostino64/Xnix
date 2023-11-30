@@ -4,114 +4,175 @@
 #include <screen.h>
 #include <libstr.h>
 #include <io.h>
+#include <isr.h>
 
-#define KBD_DATA 0x60
-#define KBD_STATUS 0x64
+volatile int shift_flag=0;
+volatile int caps_flag=0;
 
-static uint32_t keyboard_buffer_pos = 0;
-static bool caps_lock_state = false;
+volatile char* buffer; //For storing strings
+volatile char* buffer2;
+volatile uint32_t kb_count = 0; //Position in buffer
+volatile int gets_flag = 0;
 
+unsigned short ltmp;
+int ktmp = 0;
+
+static void do_gets();
+
+//US keymap
 unsigned char kbdus[128] =
 {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
   '9', '0', '-', '=', '\b',	/* Backspace */
-  0,			/* Tab */
+  '\t',			/* Tab */
   'q', 'w', 'e', 'r',	/* 19 */
   't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',	/* Enter key */
-    0,			/* 29   - Control */
+    1,			/* 29   - Control */
   'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',	/* 39 */
  '\'', '`',   0,		/* Left shift */
  '\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
-  'm', ',', '.', '/',   0,				/* Right shift */
+  'm', ',', '.', '/',   1,				/* Right shift */
   '*',
-    0,	/* Alt */
+    1,	/* Alt */
   ' ',	/* Space bar */
-    0x3a,	/* Caps lock */
-    0,	/* 59 - F1 key ... > */
-    0,   0,   0,   0,   0,   0,   0,   0,
-    0,	/* < ... F10 */
-    0,	/* 69 - Num lock*/
-    0,	/* Scroll Lock */
-    0,	/* Home key */
-    0,	/* Up Arrow */
-    0,	/* Page Up */
+    1,	/* Caps lock */
+    1,	/* 59 - F1 key ... > */
+    1,   1,   1,   1,   1,   1,   1,   1,
+    1,	/* < ... F11 */
+    1,	/* 69 - Num lock*/
+    1,	/* Scroll Lock */
+    1,	/* Home key */
+    1,	/* Up Arrow */
+    1,	/* Page Up */
   '-',
-    0,	/* Left Arrow */
-    0,
-    0,	/* Right Arrow */
+    1,	/* Left Arrow */
+    1,
+    1,	/* Right Arrow */
   '+',
-    0,	/* 79 - End key*/
-    0,	/* Down Arrow */
-    0,	/* Page Down */
-    0,	/* Insert Key */
-    0,	/* Delete Key */
-    0,   0,   0,
-    0,	/* F11 Key */
-    0,	/* F12 Key */
-    0,	/* All other keys are undefined */
+    1,	/* 79 - End key*/
+    1,	/* Down Arrow */
+    1,	/* Page Down */
+    1,	/* Insert Key */
+    1,	/* Delete Key */
+    1,   1,   '\\',
+    1,	/* F11 Key */
+    1,	/* F12 Key */
+    1,	/* All other keys are undefined */
 };
 
-uint8_t kbd_interrupt(uint8_t *keycode)
+/* Handles the keyboard interrupt */
+static void keyboard_handler(registers_t* regs)
 {
-  uint8_t status;
-  *keycode = 0;
-  
-  while (1)
-  {
-    status = i686_inb(KBD_STATUS);
-    if (status & 0x01)
-    {
-      *keycode = i686_inb(KBD_DATA);  
-      if (*keycode == 0x3a)
-        caps_lock_state = !caps_lock_state;
-      break;
-    }
-  }
-  
-  if (*keycode >= sizeof(kbdus) / sizeof(kbdus[0]))
-    return 0;
-  return kbdus[*keycode];
-}
+    unsigned char scancode;
 
-// Función para leer una línea completa del teclado
-void kbd_interrupt_handler(char *buffer, size_t buffer_size)
-{
-    uint8_t keycode;
-    keyboard_buffer_pos = 0;
+    //Read scancode
+    scancode = inb(0x60);
     
-    while (1)
+    switch (scancode)
     {
-        uint8_t c = kbd_interrupt(&keycode);
+           case 0x3A:
+                /* CAPS_LOCK LEDS */
+                outb(0x60,0xED);
+                ltmp |= 4;
+                outb(0x60,ltmp);
+                
+                if(caps_flag)
+                caps_flag=0;
+                else
+                caps_flag=1;
+                break;
+           case 0x45:
+                /* NUM_LOCK LEDS */
+                outb(0x60,0xED);
+                ltmp |= 2;
+                outb(0x60,ltmp);
+                break;
+           case 0x46:
+                /* SCROLL_LOCK LEDS */
+                outb(0x60,0xED);
+                ltmp |= 1;
+                outb(0x60,ltmp);
+                break;
+           case 60: /* F12 */
+                //reboot();
+                break;
+           default:
+                break;
+    }
 
-        if (c && c != 0x3a) // no imprime 0x3a
+    if (scancode & 0x80)
+    {
+        //Key release
+        
+        //Left and right shifts
+        if (scancode - 0x80 == 42 || scancode - 0x80 == 54)
+			shift_flag = 0;
+    }
+    else
+    {   
+        //Keypress (normal)
+        
+        //Shift
+        if (scancode == 42 || scancode == 54)
+		{
+			shift_flag = 1;
+			return;
+		}
+        
+        //Gets()
+        if(kbdus[scancode] == '\n')
         {
-          if (caps_lock_state && c >= 'a' && c <= 'z')
-            c -= 32;
-          putc(c, 0x7);
-        }
-
-        if (c == '\n')
+             if(gets_flag == 0) do_gets();
+             gets_flag++;
+             for(;kb_count; kb_count--)
+                  buffer[kb_count] = 0;              
+        } else 
         {
-            buffer[keyboard_buffer_pos] = '\0';
-            return;
-        }
-        else if (c >= ' ' && keyboard_buffer_pos < buffer_size - 1)
-        {
-          buffer[keyboard_buffer_pos] = c;
-          keyboard_buffer_pos++;
-        }
-        else if (keyboard_buffer_pos >= buffer_size - 1)
-        {
-            // buffer overflow detected
-            buffer[buffer_size - 1] = '\0'; // cuando se sobrepase el tamaño del bufer, se corta
-            k_memset(buffer, 0x0, buffer_size); // no guarda los datos del bufer
-            puts("\nbuffer full!\n", 0x04);
-            return;
-        }
+             if(kbdus[scancode] == '\b')
+             {
+                  if(kb_count)
+                  buffer[kb_count--] = 0;
+             }
+             else
+                  buffer[kb_count++] = kbdus[scancode];
+        }   
+        putc(kbdus[scancode], 0x7);
+        return;
     }
 }
 
-void kbd_init(char *buffer, size_t buffer_size)
+void init_keyboard()
 {
-  kbd_interrupt_handler(buffer, buffer_size);
+    register_interrupt_handler(IRQ1, &keyboard_handler);
+}
+
+//Gets a key
+unsigned char getch()
+{
+     unsigned char getch_char;
+     
+     if(kbdus[inb(0x60)] != 0) //Not empty
+     outb(0x60,0xf4); //Clear buffer
+     
+     while(kbdus[inb(0x60)] == 0); //While buffer is empty
+     getch_char = kbdus[inb(0x60)];
+     outb(0x60,0xf4); //Leave it emptying
+     return getch_char;
+}
+
+char* gets()
+{ 
+     gets_flag = 0;
+     while(gets_flag == 0);
+     return (char*)buffer2;
+}
+
+static void do_gets()
+{
+     buffer[kb_count++] = 0; //Null terminated biatch!
+     for(;kb_count; kb_count--)
+     {
+          buffer2[kb_count] = buffer[kb_count];
+     }
+     return;
 }

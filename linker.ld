@@ -1,16 +1,29 @@
-ENTRY(_start)
+ENTRY(start)
 OUTPUT_FORMAT(elf32-i386)
 phys = 0x00100000;
-
 SECTIONS
 {
-    . = phys;
+  .text phys : AT(phys)
+  {
+    code = .; _code = .; __code = .;
+    *(.text)
+    . = ALIGN(4096);
+  }
 
-    .entry              : { __entry_start = .;      *(.entry)   }
-    .text               : { __text_start = .;       *(.text)    }
-    .data               : { __data_start = .;       *(.data)    }
-    .rodata             : { __rodata_start = .;     *(.rodata)  }
-    .bss                : { __bss_start = .;        *(.bss)     }
-    
-    __end = .;
+  .data : AT(phys + (data - code))
+  {
+     data = .; _data = .; __data = .;
+     *(.data)
+     *(.rodata)
+     . = ALIGN(4096);
+  }
+
+  .bss : AT(phys + (bss - code))
+  {
+    bss = .; _bss = .; __bss = .;
+    *(.bss)
+    . = ALIGN(4096);
+  }
+
+  end = .; _end = .; __end = .;
 }

@@ -13,7 +13,7 @@ all: $(OBJECTS_ASM) $(OBJECTS_C) link
 	@echo "--> Compiled: " $<
 
 %.c.o: %.c
-	@$(CC) $(CFLAGS) -I include/ -c $< -o $@
+	@$(CC) $(CFLAGS) -I./include -c $< -o $@
 	@echo "--> Compiled: " $<
 
 link:
