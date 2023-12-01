@@ -1,10 +1,10 @@
 /*
  *  XnixOS
  *
- *  xnix/core/common.c
+ *  boot/stage2/common.c
  */
  
-#include <xnix/common.h>
+#include <common.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -21,6 +21,18 @@ void memset(uint8_t *dest, uint8_t val, uint32_t len)
 {
     uint8_t *temp = (uint8_t *)dest;
     for ( ; len != 0; len--) *temp++ = val;
+}
+
+int memcmp(const void* ptr1, const void* ptr2, uint16_t num)
+{
+    const uint8_t* u8Ptr1 = (const uint8_t *)ptr1;
+    const uint8_t* u8Ptr2 = (const uint8_t *)ptr2;
+
+    for (uint16_t i = 0; i < num; i++)
+        if (u8Ptr1[i] != u8Ptr2[i])
+            return 1;
+
+    return 0;
 }
 
 // Compare two strings. Should return -1 if 
@@ -87,12 +99,16 @@ void strncat(char *dest, const char *src, unsigned long n)
     dest[dest_len + i] = '\0';
 }
 
-int strlen(char *src)
+unsigned strlen(const char* str)
 {
-    int i = 0;
-    while (*src++)
-        i++;
-    return i;
+    unsigned len = 0;
+    while (*str)
+    {
+        ++len;
+        ++str;
+    }
+
+    return len;
 }
 
 char *strchr(const char* s,int c)

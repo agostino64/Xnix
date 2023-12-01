@@ -31,16 +31,6 @@ typedef unsigned int uint32_t;
 typedef unsigned int uint_least32_t;
 typedef unsigned int uint_fast32_t;
 
-// 64-bit signed integer
-typedef signed long long int64_t;
-typedef signed long long int_least64_t;
-typedef signed long long int_fast64_t;
-
-// 64-bit unsigned integer
-typedef unsigned long long uint64_t;
-typedef unsigned long long uint_least64_t;
-typedef unsigned long long uint_fast64_t;
-
 // Macros for minimum and maximum values of integer types
 #define INT8_MIN (-128)
 #define INT8_MAX 127
@@ -54,8 +44,4 @@ typedef unsigned long long uint_fast64_t;
 #define INT32_MAX 2147483647
 #define UINT32_MAX 4294967295U
 
-#define INT64_MIN (-9223372036854775808LL)
-#define INT64_MAX 9223372036854775807LL
-#define UINT64_MAX 18446744073709551615ULL
-
-#endif /* _STDINT_H */
+#endif

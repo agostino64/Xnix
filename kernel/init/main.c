@@ -14,16 +14,13 @@
 #include <xnix/shell.h>
 #include <xnix/gdt.h>
 
-uint32_t initial_esp;
-static char* cmd;
+extern uint8_t __bss_start;
+extern uint8_t __end;
 
-void start_kernel(struct multiboot *mbd, uint32_t initial_stack)
-{
-    initial_esp = initial_stack; //Set up for stack switch
-    
+void __attribute__((section(".entry"))) start(uint16_t bootDrive)
+{   
+    memset(&__bss_start, 0, (&__end) - (&__bss_start));
     clear_vga();
-    
-    cli(); // dissable interrupts
     
     isr_init();
     init_gdt();
@@ -39,5 +36,5 @@ void start_kernel(struct multiboot *mbd, uint32_t initial_stack)
     
     sti(); // enable interrupts
     
-    init_tty(cmd);
+    init_tty();
 }

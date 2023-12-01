@@ -6,6 +6,6 @@ typedef struct {
     void (*func)();
 } Cmd;
 
-void init_tty(char *cmd);
+void init_tty();
 
 #endif

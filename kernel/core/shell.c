@@ -9,10 +9,13 @@
 #include <xnix/keyb.h>
 #include <xnix/shell.h>
 #include <xnix/timer.h>
+#include <xnix/asm.h>
 
 #include <xnix/version.h>
 
-void start_shell(char *cmd)
+static char* cmd;
+
+void start_shell()
 {
   /*
     puts(">> ", 0x8);
@@ -38,6 +41,7 @@ void help_func()
   printk("Write: \'version\' for version\n");
   printk("Write: \'xnix\' for ascii art\n");
   printk("Write: \'clear\' for clean\n");
+  printk("Write: \'reboot\' for reboot system\n");
 }
 
 void version_func()
@@ -57,7 +61,7 @@ void acsii_func()
   printk("%s\n", ascii_xnix);
 }
 
-void exec_cmd(char *cmd, Cmd *cmds, int num_cmds)
+void exec_cmd(Cmd *cmds, int num_cmds)
 {
     for (int i = 0; i < num_cmds; i++) {
         if (strcmp(cmd, cmds[i].cmd) == 0) {
@@ -69,23 +73,24 @@ void exec_cmd(char *cmd, Cmd *cmds, int num_cmds)
     printk("%s: Command not found.\n", cmd);
 }
 
-void cmd_init(char *cmd)
+void cmd_init()
 {
   Cmd cmds[] = {
     { "help", help_func },
     { "version", version_func },
     { "xnix", acsii_func },
-    { "clear", clear_vga }
+    { "clear", clear_vga },
+    { "reboot", reboot }
   };
 
-  exec_cmd(cmd, cmds, sizeof(cmds) / sizeof(cmds[0]));
+  exec_cmd(cmds, sizeof(cmds) / sizeof(cmds[0]));
 }
 
-void init_tty(char *cmd)
+void init_tty()
 {
     while(1)
     {
-      start_shell(cmd);
-      cmd_init(cmd);
+      start_shell();
+      cmd_init();
     }
 }
