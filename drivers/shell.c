@@ -24,13 +24,15 @@ extern int _cpuid_support(void);
 
 void help_func(void)
 {
-  printk("Write: \'version\' for version\n");
-  printk("Write: \'clear\' for clear screen\n");
-  printk("Write: \'reboot\' for reboot system\n");
-  printk("Write: \'shutdown\' for poweroff system\n");
-  printk("Write: \'cpuinfo\' for print cpu info\n");
-  printk("Write: \'xnix\' for print xnix logo\n");
-  printk("Write: \'error\' for error test\n");
+  printk("Xnix %s - i386\n\n", XNIX_VERSION);
+  printk("Option      meaning\n");
+  printk(" version     get version\n");
+  printk(" clear       clear screen\n");
+  printk(" reboot      reboot system\n");
+  printk(" shutdown    poweroff system\n");
+  printk(" cpuinfo     print cpu info\n");
+  printk(" xnix        print xnix logo\n");
+  printk(" error       test error\n");
   printk("\nCopyright (C) 2023, 2024 Agustin Gutierrez\n");
 }
 
@@ -44,7 +46,7 @@ void cpuinfo_func(void)
   if (_cpuid_support())
     detect_cpu();
   else
-    KERN_ERR("The cpuid extension is not supported by the CPU.\n");
+    printk("cpuid extension is not supported by the CPU.\n");
 }
 
 void exec_cmd(Cmd *cmds, int num_cmds)
