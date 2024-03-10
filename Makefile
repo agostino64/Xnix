@@ -1,15 +1,15 @@
 # Makefile from JamesM's kernel tutorials and modified by Aarch64.
 
 AS = nasm
-CC = $(HOME)/toolchain/bin/i686-elf-gcc
-LD = $(HOME)/toolchain/bin/i686-elf-ld
+CC = gcc
+LD = ld
 
 OUT = Image
 
 CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin  -I./include \
-	 -fno-stack-protector -Wall -Wstrict-prototypes -g
-LDFLAGS += -T linker.ld
-ASFLAGS += -f elf
+	 -fno-stack-protector -Wall -Wstrict-prototypes -m32 -g
+LDFLAGS += -T linker.ld -m elf_i386
+ASFLAGS += -f elf -F dwarf -g
 
 SOURCES = core/boot.o \
 	  core/interrupt.o \
