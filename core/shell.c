@@ -16,19 +16,31 @@
 #include <xnix/timer.h>
 #include <xnix/isr.h>
 #include <xnix/heap.h>
-#include <xnix/drv_register.h>
-#include <xnix/drv_control.h>
 
 // Shell build and version info
-#define XNIX_VERSION "0.1.2"
-#define BUILD_GCC __GNUC__
-#define BUILD_GCC_VERSION __GNUC_MINOR__
-#define BUILD_GCC_PATCH __GNUC_PATCHLEVEL__
+#define XNIX_VERSION "0.1.2-1"
 #define BUILD_DATE __DATE__
 #define BUILD_TIME __TIME__
 
+#ifdef __clang__
+    #define BUILD_COMPILER "Clang"
+    #define BUILD_COMPILER_MAJOR __clang_major__
+    #define BUILD_COMPILER_MINOR __clang_minor__
+    #define BUILD_COMPILER_PATCH __clang_patchlevel__
+#elif defined(__GNUC__)
+    #define BUILD_COMPILER "GCC"
+    #define BUILD_COMPILER_MAJOR __GNUC__
+    #define BUILD_COMPILER_MINOR __GNUC_MINOR__
+    #define BUILD_COMPILER_PATCH __GNUC_PATCHLEVEL__
+#else
+    #define BUILD_COMPILER "Unknown"
+    #define BUILD_COMPILER_MAJOR 0
+    #define BUILD_COMPILER_MINOR 0
+    #define BUILD_COMPILER_PATCH 0
+#endif
+
 // Default input buffer size
-#define INITIAL_SIZE 256
+#define INITIAL_SIZE 10
 
 // Shell command buffer and size tracking
 static char* cmd = NULL;
@@ -60,11 +72,12 @@ void help_func(void)
  */
 void version_func(void)
 {
-    printk("Xnix Version %s (GCC %d.%d.%d) %s %s\n",
+    printk("Xnix Version %s (%s %d.%d.%d) %s %s\n",
            XNIX_VERSION,
-           BUILD_GCC,
-           BUILD_GCC_VERSION,
-           BUILD_GCC_PATCH,
+           BUILD_COMPILER,
+           BUILD_COMPILER_MAJOR,
+           BUILD_COMPILER_MINOR,
+           BUILD_COMPILER_PATCH,
            BUILD_DATE,
            BUILD_TIME);
 }
@@ -165,15 +178,16 @@ void init_shell(void)
 
     while (1)
     {
+        current_size = INITIAL_SIZE; // Restart memory size
         write(">> ");  // Prompt
         gets();         // Wait for input (populates buffer2)
         char* input = get_input_buffer();
-        u32 input_len = strlen(input) + 1;  // +1 for null terminator
+        u32 input_len = strlen(input);
 
         // Resize buffer if needed
         if (input_len > current_size)
         {
-            char* new_cmd = (char*)krealloc(cmd, current_size, input_len);
+            char* new_cmd = (char*)krealloc(cmd, current_size, (input_len+1)); // Add 1 for avoid stack overflow
             if (new_cmd)
             {
                 cmd = new_cmd;
