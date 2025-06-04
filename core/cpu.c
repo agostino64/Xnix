@@ -449,12 +449,12 @@ int do_amd(void)
 	return 0;
 }
 
-void sti()
+void sti(void)
 {
      __asm__ __volatile__ ("sti");
 }
 
-void cli()
+void cli(void)
 {
      __asm__ __volatile__ ("cli");
 }

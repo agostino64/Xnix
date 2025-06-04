@@ -1,7 +1,11 @@
 /*
- *  XnixOS
+ *  Xnix
  *
- *  xnix/drivers/keyb.c
+ *  Copyright (C) 2022, 2025  Agustin Gutierrez
+ *
+ *  Basic keyboard driver for handling PS/2 input.
+ *  Supports scancode decoding, buffering input characters, 
+ *  and processing Caps Lock / Shift modifiers.
  */
 
 #include <xnix/common.h>
@@ -10,176 +14,188 @@
 
 extern u32 cursor_y, cursor_x;
 
-volatile int shift_flag=0;
-volatile int caps_flag=0;
+// Modifier flags
+volatile int shift_flag = 0;
+volatile int caps_flag = 0;
 
-volatile char* buffer; //For storing strings
-volatile char* buffer2;
-volatile int kb_count = 0; //Position in buffer
-volatile int gets_flag = 0;
+// Buffers for capturing user input
+volatile char* buffer;   // Current input buffer
+volatile char* buffer2;  // Copy for gets()
+volatile int kb_count = 0; // Index for input buffer
+volatile int gets_flag = 0; // Flag indicating newline (Enter) received
 
+// LED control bits for keyboard
 unsigned short ltmp;
 int ktmp = 0;
 
+// Internal function to transfer input buffer to gets buffer
 static void do_gets(void);
 
-//US keymap
-unsigned char kbdus[128] =
-{
-    0,  27, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
-  '9', '0', '-', '=', '\b',	/* Backspace */
-  '\t',			/* Tab */
-  'q', 'w', 'e', 'r',	/* 19 */
-  't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',	/* Enter key */
-    1,			/* 29   - Control */
-  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',	/* 39 */
- '\'', '`',   0,		/* Left shift */
- '\\', 'z', 'x', 'c', 'v', 'b', 'n',			/* 49 */
-  'm', ',', '.', '/',   1,				/* Right shift */
-  '*',
-    1,	/* Alt */
-  ' ',	/* Space bar */
-    1,	/* Caps lock */
-    1,	/* 59 - F1 key ... > */
-    1,   1,   1,   1,   1,   1,   1,   1,
-    1,	/* < ... F11 */
-    1,	/* 69 - Num lock*/
-    1,	/* Scroll Lock */
-    1,	/* Home key */
-    1,	/* Up Arrow */
-    1,	/* Page Up */
-  '-',
-    1,	/* Left Arrow */
-    1,
-    1,	/* Right Arrow */
-  '+',
-    1,	/* 79 - End key*/
-    1,	/* Down Arrow */
-    1,	/* Page Down */
-    1,	/* Insert Key */
-    1,	/* Delete Key */
-    1,   1,   '\\',
-    1,	/* F11 Key */
-    1,	/* F12 Key */
-    1,	/* All other keys are undefined */
+/**
+ * US QWERTY keymap for scancode set 1.
+ * Values of 1 are reserved or unprintable.
+ */
+unsigned char kbdus[128] = {
+    0,  27, '1', '2', '3', '4', '5', '6', '7', '8',
+    '9', '0', '-', '=', '\b',       // Backspace
+    '\t',                           // Tab
+    'q', 'w', 'e', 'r',
+    't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', // Enter
+    1,                              // Control
+    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
+    '\'', '`', 0,                   // Left Shift
+    '\\', 'z', 'x', 'c', 'v', 'b', 'n',
+    'm', ',', '.', '/', 1,         // Right Shift
+    '*',
+    1,                              // Alt
+    ' ',                            // Spacebar
+    1,                              // Caps Lock
+    1, 1, 1, 1, 1, 1, 1, 1,         // F1–F8
+    1,                              // F9
+    1,                              // Num Lock
+    1,                              // Scroll Lock
+    1,                              // Home
+    1,                              // Up
+    1,                              // Page Up
+    '-', 1, 1,                      // Left, ??, Right
+    '+', 1,                         // End
+    1,                              // Down
+    1,                              // Page Down
+    1,                              // Insert
+    1,                              // Delete
+    1, 1, '\\',                     // ??, ??, Backslash
+    1, 1,                           // F11, F12
+    1                               // All others undefined
 };
 
-/* Handles the keyboard interrupt */
+/**
+ * Keyboard interrupt handler.
+ * Processes scancodes, manages buffer input, and handles modifier states.
+ */
 static void keyboard_handler(registers_t regs)
 {
-    unsigned char scancode;
+    unsigned char scancode = inb(0x60);
 
-    //Read scancode
-    scancode = inb(0x60);
-    
     switch (scancode)
     {
-           case 0x3A:
-                /* CAPS_LOCK LEDS */
-                outb(0x60,0xED);
-                ltmp |= 4;
-                outb(0x60,ltmp);
-                
-                if(caps_flag)
-                caps_flag=0;
-                else
-                caps_flag=1;
-                break;
-           case 0x45:
-                /* NUM_LOCK LEDS */
-                outb(0x60,0xED);
-                ltmp |= 2;
-                outb(0x60,ltmp);
-                break;
-           case 0x46:
-                /* SCROLL_LOCK LEDS */
-                outb(0x60,0xED);
-                ltmp |= 1;
-                outb(0x60,ltmp);
-                break;
-           case 60: /* F12 */
-                //reboot();
-                break;
-           default:
-                break;
+        case 0x3A: // Caps Lock
+            outb(0x60, 0xED); // Prepare LED change
+            ltmp |= 4;        // Caps bit
+            outb(0x60, ltmp);
+            caps_flag = !caps_flag;
+            break;
+
+        case 0x45: // Num Lock
+            outb(0x60, 0xED);
+            ltmp |= 2;
+            outb(0x60, ltmp);
+            break;
+
+        case 0x46: // Scroll Lock
+            outb(0x60, 0xED);
+            ltmp |= 1;
+            outb(0x60, ltmp);
+            break;
+
+        case 60: // F12 (placeholder for reboot or other feature)
+            // reboot();
+            break;
+
+        default:
+            break;
     }
 
-    if (scancode & 0x80)
-    {
-        //Key release
-        
-        //Left and right shifts
+    if (scancode & 0x80) {
+        // Key release (bit 7 set)
         if (scancode - 0x80 == 42 || scancode - 0x80 == 54)
-			shift_flag = 0;
-    }
-    else
-    {   
-        //Keypress (normal)
-        
-        //Shift
-        if (scancode == 42 || scancode == 54)
-		{
-			shift_flag = 1;
-			return;
-		}
-        
-        //Gets()
-        if(kbdus[scancode] == '\n')
-        { 
-             // add new line in keyboard buffer
-             if(gets_flag == 0) do_gets();
-             gets_flag++;
-             for(;kb_count; kb_count--)
-                  buffer[kb_count] = 0;              
+            shift_flag = 0; // Left/Right Shift released
+    } else {
+        // Key press
+        if (scancode == 42 || scancode == 54) {
+            shift_flag = 1;
+            return;
         }
-        else 
-        {
-             // Delete key
-             if(kbdus[scancode] == '\b')
-             {    
-                  if(kb_count)
-                    buffer[kb_count--] = 0;
-             }
-             else
-                  buffer[kb_count++] = kbdus[scancode];
-        }   
-        put(kbdus[scancode]);
+
+        // Enter key
+        if (kbdus[scancode] == '\n') {
+            if (gets_flag == 0) do_gets(); // Transfer buffer
+            gets_flag++;
+            while (kb_count) buffer[kb_count--] = 0; // Clear buffer
+        }
+        else {
+            if (kbdus[scancode] == '\b') {
+                if (kb_count) buffer[kb_count--] = 0;
+            } else {
+                buffer[kb_count++] = kbdus[scancode];
+            }
+        }
+
+        put(kbdus[scancode]); // Echo character to screen
         return;
     }
 }
 
+/**
+ * Registers the keyboard interrupt handler (IRQ1).
+ * Call this once during system initialization.
+ */
 void init_keyboard(void)
 {
     register_interrupt_handler(IRQ1, &keyboard_handler);
 }
 
-//Gets a key
+/**
+ * Reads a single character from keyboard buffer.
+ * Waits until a key is available.
+ *
+ * @return ASCII character code of key pressed.
+ */
 unsigned char getch(void)
 {
-     unsigned char getch_char;
-     
-     if(kbdus[inb(0x60)] != 0) //Not empty
-     outb(0x60,0xf4); //Clear buffer
-     
-     while(kbdus[inb(0x60)] == 0); //While buffer is empty
-     getch_char = kbdus[inb(0x60)];
-     outb(0x60,0xf4); //Leave it emptying
-     return getch_char;
+    unsigned char getch_char;
+
+    if (kbdus[inb(0x60)] != 0)
+        outb(0x60, 0xF4); // Clear buffer
+
+    while (kbdus[inb(0x60)] == 0); // Wait for input
+    getch_char = kbdus[inb(0x60)];
+    outb(0x60, 0xF4); // Acknowledge
+
+    return getch_char;
 }
 
+/**
+ * Reads a line of input from the keyboard until Enter is pressed.
+ * Returns pointer to the static input buffer.
+ *
+ * @return Null-terminated input string.
+ */
 char* gets(void)
-{ 
-     gets_flag = 0;
-     while(gets_flag == 0);
-     return (char*)buffer2;
+{
+    gets_flag = 0;
+    while (gets_flag == 0);
+    return (char*)buffer2;
 }
 
+/**
+ * Transfers the current buffer content to buffer2.
+ * Called internally when Enter is pressed.
+ */
 static void do_gets(void)
 {
-     buffer[kb_count++] = 0; //Null terminated biatch!
-     for(;kb_count; kb_count--)
-     {
-          buffer2[kb_count] = buffer[kb_count];
-     }
-     return;
+    buffer[kb_count++] = 0; // Null-terminate
+
+    for (; kb_count; kb_count--)
+        buffer2[kb_count] = buffer[kb_count];
 }
+
+/**
+ * Returns pointer to latest keyboard input buffer (copied on Enter).
+ *
+ * @return Pointer to static buffer2.
+ */
+char* get_input_buffer(void)
+{
+    return (char*)buffer2;
+}
+

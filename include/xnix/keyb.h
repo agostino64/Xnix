@@ -4,5 +4,6 @@
 void init_keyboard(void);
 unsigned char getch(void);
 char* gets(void);
+char* get_input_buffer(void);
 
 #endif

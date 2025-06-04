@@ -28,6 +28,15 @@ typedef char* va_list;
 
 #define KERN_ERR(format, ...) \
 	printk("%s [%s] (%d): " format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+	
+// Control debug logging with DEBUG flag
+#ifdef DEBUG
+    #define KERN_DEBUG(format, ...) \
+        printk("%s [%s] (%d): DEBUG: " format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#else
+    // When DEBUG is not defined, KERN_DEBUG does nothing
+    #define KERN_DEBUG(format, ...) ((void)0)
+#endif
 
 void outb(u16 port, u8 value);
 void outw(u16 port, u16 value);
@@ -37,5 +46,7 @@ u16 inw(u16 port);
 void memset(void *dest, u8 val, u32 len);
 void memcpy(u8 *dest, const u8 *src, u32 len);
 int strcmp(char *str1, char *str2);
+char* strcpy(char* dest, const char* src);
+unsigned int strlen(const char *str);
 
 #endif

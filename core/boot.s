@@ -40,8 +40,7 @@ _start:
 
   ; Execute the kernel:
   cli                         ; Disable interrupts.
-  call clear_screen	      ; Initialise the screen (by clearing it)
-  call start_kernel            ; jump our main() function.
+  jmp start_kernel            ; jump our main() function.
   jmp $                       ; Enter an infinite loop, to stop the processor
                               ; executing whatever rubbish is in the memory
                               ; after our kernel! 

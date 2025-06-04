@@ -1,5 +1,7 @@
 # Makefile from JamesM's kernel tutorials and modified by Aarch64.
 
+DEBUG = 1
+
 AS = nasm
 CC = gcc
 LD = ld
@@ -7,9 +9,14 @@ LD = ld
 OUT = Image
 
 CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin  -I./include \
-	 -fno-stack-protector -Wall -Wstrict-prototypes -m32 -g
+	 -fno-stack-protector -m32
 LDFLAGS += -T linker.ld -m elf_i386
-ASFLAGS += -f elf -F dwarf -g
+ASFLAGS += -f elf -F dwarf
+
+ifeq ($(DEBUG),1)
+    CFLAGS  += -DDEBUG -g -Wall -Wstrict-prototypes
+    ASFLAGS += -g
+endif
 
 SOURCES = core/boot.o \
 	  core/interrupt.o \
@@ -21,9 +28,11 @@ SOURCES = core/boot.o \
 	  core/timer.o \
 	  core/cpu.o \
 	  core/isr.o \
+	  core/heap.o \
+	  core/paging.o \
 	  drivers/vga.o \
 	  drivers/keyb.o \
-	  drivers/shell.o
+	  drivers/shell.o 
 
 all: $(SOURCES) link
 

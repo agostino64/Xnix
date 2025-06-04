@@ -63,3 +63,26 @@ int strcmp(char *str1, char *str2)
   
       return 0;
 }
+
+char* strcpy(char* dest, const char* src) 
+{
+    char* original = dest;
+
+    while (*src) 
+    {
+        *dest++ = *src++;
+    }
+
+    *dest = '\0';  // Null-terminate the destination string
+    return original;
+}
+
+unsigned int strlen(const char *str)
+{
+    const char *s = str;
+    while (*s) {
+        s++;
+    }
+    return (unsigned int)(s - str);
+}
+
