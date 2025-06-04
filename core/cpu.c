@@ -459,7 +459,7 @@ void cli(void)
      __asm__ __volatile__ ("cli");
 }
 
-void halt()
+void halt(void)
 {
      __asm__ __volatile__ ("hlt");
 }

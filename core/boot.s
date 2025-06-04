@@ -41,4 +41,9 @@ _start:
   
   ; Execute the kernel:
   cli                         ; Disable interrupts.
+  mov esp, stack_space          ;set stack pointer
   jmp start_kernel            ; jump our main() function.
+  
+section .bss
+resb 32768                        ;8KB memory reserved for stack
+stack_space:

@@ -11,6 +11,8 @@
 #include <xnix/common.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
+#include <xnix/drv_register.h>
+#include <xnix/drv_control.h>
 
 extern u32 cursor_y, cursor_x;
 
@@ -139,9 +141,10 @@ static void keyboard_handler(registers_t regs)
  * Registers the keyboard interrupt handler (IRQ1).
  * Call this once during system initialization.
  */
-void init_keyboard(void)
+static int init_keyboard(void)
 {
     register_interrupt_handler(IRQ1, &keyboard_handler);
+    return 0;
 }
 
 /**
@@ -199,3 +202,4 @@ char* get_input_buffer(void)
     return (char*)buffer2;
 }
 
+REGISTER_DRIVER(init_keyboard, DRV_KEYBOARD);

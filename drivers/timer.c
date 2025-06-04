@@ -4,6 +4,10 @@
 #include <xnix/timer.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
+#include <xnix/drv_register.h>
+#include <xnix/drv_control.h>
+
+#define FREQUENCY 50
 
 u32 tick = 0;
 volatile u32 wait_ticks;
@@ -20,7 +24,7 @@ void timer_wait(u32 ticks)
     while (wait_ticks <= ticks);
 }
 
-void init_timer(u32 frequency)
+static int init_timer(void)
 {
    // Firstly, register our timer callback.
    register_interrupt_handler(IRQ0, &timer_callback);
@@ -28,7 +32,7 @@ void init_timer(u32 frequency)
    // The value we send to the PIT is the value to divide it's input clock
    // (1193180 Hz) by, to get our required frequency. Important to note is
    // that the divisor must be small enough to fit into 16-bits.
-   u32 divisor = 1193180 / frequency;
+   u32 divisor = 1193180 / FREQUENCY;
 
    // Send the command byte.
    outb(0x43, 0x36);
@@ -40,4 +44,7 @@ void init_timer(u32 frequency)
    // Send the frequency divisor.
    outb(0x40, l);
    outb(0x40, h);
+   return 0;
 }
+
+REGISTER_DRIVER(init_timer, DRV_TIMER);

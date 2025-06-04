@@ -16,9 +16,11 @@
 #include <xnix/timer.h>
 #include <xnix/isr.h>
 #include <xnix/heap.h>
+#include <xnix/drv_register.h>
+#include <xnix/drv_control.h>
 
 // Shell build and version info
-#define XNIX_VERSION "0.1.1"
+#define XNIX_VERSION "0.1.2"
 #define BUILD_GCC __GNUC__
 #define BUILD_GCC_VERSION __GNUC_MINOR__
 #define BUILD_GCC_PATCH __GNUC_PATCHLEVEL__
@@ -192,4 +194,5 @@ void init_shell(void)
         cmd_init();  // Try to run the command
     }
 }
+
 

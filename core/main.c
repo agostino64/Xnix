@@ -14,6 +14,7 @@
 #include <xnix/isr.h>
 #include <xnix/heap.h>
 #include <xnix/paging.h>
+#include <xnix/drv_manager.h>
 
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
@@ -34,7 +35,7 @@
  */
 __attribute__((noreturn)) void start_kernel(void)
 {     
-    printk("Loading...\n");
+    printk("Xnix...\n\n");
 
     // Set up GDT and IDT for protected mode and interrupt handling
     printk("Init IDT/GDT...\n");
@@ -53,12 +54,16 @@ __attribute__((noreturn)) void start_kernel(void)
     sti();
     
     // Start the programmable interval timer at 50 Hz (20ms tick)
-    printk("Init Timer...\n");
-    init_timer(50);
+    printk("Init Timer driver...\n");
+    if (drv_load(DRV_TIMER) != 0) {
+        KERN_ERR("DRV_TIMER load failed!\n");
+    }
     
     // Set up keyboard interrupt handler and input buffer
-    printk("Init keyboard...\n");
-    init_keyboard();
+    printk("Init keyboard driver...\n");
+    if (drv_load(DRV_KEYBOARD) != 0) {
+        KERN_ERR("DRV_KEYBOARD load failed!\n");
+    }
  
     // Launch the interactive shell for user input
     printk("Init shell...\n");
