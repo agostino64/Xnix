@@ -37,10 +37,8 @@ mboot:
 
 _start:
   push    ebx                   ; Load multiboot header location
-
+  call    clear_screen        ; clear screen
+  
   ; Execute the kernel:
   cli                         ; Disable interrupts.
   jmp start_kernel            ; jump our main() function.
-  jmp $                       ; Enter an infinite loop, to stop the processor
-                              ; executing whatever rubbish is in the memory
-                              ; after our kernel! 

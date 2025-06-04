@@ -34,7 +34,6 @@
  */
 __attribute__((noreturn)) void start_kernel(void)
 {     
-    clear_screen();
     printk("Loading...\n");
 
     // Set up GDT and IDT for protected mode and interrupt handling
