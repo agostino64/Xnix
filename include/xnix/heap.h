@@ -5,7 +5,7 @@
 
 #define HEAP_PHYS_ADDR  0x100000       // Physical start of the heap (1MB)
 #define HEAP_VIRT_ADDR  0xC0000000     // Virtual start of the heap
-#define HEAP_SIZE       0x100000       // 1MB heap size
+#define HEAP_SIZE       0x400000       // 4MB heap size
 
 typedef struct heap_header {
     u32 size;

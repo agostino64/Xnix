@@ -4,7 +4,7 @@
 #ifndef TIMER_H
 #define TIMER_H
 
-#include "common.h"
+#include "../common.h"
 
 void timer_wait(u32 ticks);
 

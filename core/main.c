@@ -6,8 +6,8 @@
 
 #include <xnix/vga.h>
 #include <xnix/descriptor_tables.h>
-#include <xnix/timer.h>
-#include <xnix/keyb.h>
+#include <xnix/drivers/timer.h>
+#include <xnix/drivers/keyb.h>
 #include <xnix/common.h>
 #include <xnix/cpu.h>
 #include <xnix/shell.h>
@@ -15,6 +15,11 @@
 #include <xnix/heap.h>
 #include <xnix/paging.h>
 #include <xnix/drv_manager.h>
+#include <xnix/log.h>
+#include <xnix/multiboot.h>
+#include <xnix/drivers/serial.h>
+
+u32 initial_esp;
 
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
@@ -25,7 +30,7 @@
  * - Virtual Memory Paging
  * - Kernel Heap
  * - Interrupts (enabled via STI)
- * - Timer (set to 50Hz)
+ * - Timer (default set to 50Hz)
  * - Keyboard Driver
  * - Interactive Shell
  * 
@@ -33,17 +38,24 @@
  * 
  * Note: __attribute__((noreturn)) indicates this function never returns.
  */
-__attribute__((noreturn)) void start_kernel(void)
+__attribute__((noreturn)) void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
 {     
     printk("Xnix...\n\n");
+    initial_esp = initial_stack;
 
     // Set up GDT and IDT for protected mode and interrupt handling
     printk("Init IDT/GDT...\n");
     init_descriptor_tables();
     
-    // Initialize virtual memory and enable paging
-    printk("Init paging...\n");
-    init_paging();  // Sets up basic page tables and enables paging
+    printk("Init serial driver...\n");
+    if (drv_load(DRV_SERIAL) != 0) {
+        KLOG(LOG_LEVEL_ERROR, "DRV_SERIAL load failed!\n");
+    }
+    
+    //Initialise paging with the memory amount reported by GRUB
+    init_paging();
+    printk("Paging initialised\n");
+
     
     // Set up dynamic memory allocation (kernel heap)
     printk("Init heap...\n");
@@ -56,22 +68,22 @@ __attribute__((noreturn)) void start_kernel(void)
     // Start the programmable interval timer at 50 Hz (20ms tick)
     printk("Init Timer driver...\n");
     if (drv_load(DRV_TIMER) != 0) {
-        KERN_ERR("DRV_TIMER load failed!\n");
+        KLOG(LOG_LEVEL_ERROR, "DRV_TIMER load failed!\n");
     }
     
     // Set up keyboard interrupt handler and input buffer
     printk("Init keyboard driver...\n");
     if (drv_load(DRV_KEYBOARD) != 0) {
-        KERN_ERR("DRV_KEYBOARD load failed!\n");
+        KLOG(LOG_LEVEL_ERROR, "DRV_KEYBOARD load failed!\n");
     }
  
     // Launch the interactive shell for user input
     printk("Init shell...\n");
     init_shell();
     
-    // Infinite loop to halt the CPU when idle
-    while (1) {
-        halt();
+    while (1)
+    {
+      halt();
     }
 }
 

@@ -11,6 +11,7 @@
 #include <xnix/heap.h>
 #include <xnix/vga.h>
 #include <xnix/common.h>
+#include <xnix/log.h>
 
 // Heap starts at a high virtual address mapped by paging.
 // HEAP_START is defined externally via paging.
@@ -31,7 +32,7 @@ void init_heap(void) {
     heap_start->next = NULL;
     free_list = heap_start;
 
-    KERN_DEBUG("[heap] Initialized at 0x%X with size %u bytes\n", (u32)heap_start, heap_start->size);
+    KLOG(LOG_LEVEL_DEBUG, "[heap] Initialized at 0x%X with size %u bytes\n", (u32)heap_start, heap_start->size);
 }
 
 /**
@@ -53,7 +54,7 @@ static void* allocate_block(heap_header_t* block, u32 size) {
         block->size = size;
         block->next = new_block;
 
-        KERN_DEBUG("[heap] Block split at 0x%X\n", (u32)new_block);
+        KLOG(LOG_LEVEL_DEBUG, "[heap] Block split at 0x%X\n", (u32)new_block);
     }
 
     block->is_free = 0;
@@ -71,13 +72,13 @@ void* kmalloc(u32 size) {
     while (current) {
         if (current->is_free && current->size >= size) {
             void* ptr = allocate_block(current, size);
-            KERN_DEBUG("[heap] Allocated %u bytes at 0x%X\n", size, (u32)ptr);
+            KLOG(LOG_LEVEL_DEBUG, "[heap] Allocated %u bytes at 0x%X\n", size, (u32)ptr);
             return ptr;
         }
         current = current->next;
     }
 
-    KERN_ERR("[heap] ERROR: Out of memory\n");
+    KLOG(LOG_LEVEL_ERROR, "[heap] ERROR: Out of memory\n");
     return NULL;
 }
 
@@ -128,7 +129,7 @@ void* kmalloc_aligned(u32 size, u32 align) {
         current = current->next;
     }
 
-    KERN_ERR("[heap] ERROR: Aligned allocation failed\n");
+    KLOG(LOG_LEVEL_ERROR, "[heap] ERROR: Aligned allocation failed\n");
     return NULL;
 }
 
@@ -143,7 +144,7 @@ void kfree(void* ptr) {
     heap_header_t* header = (heap_header_t*)((u8*)ptr - sizeof(heap_header_t));
     header->is_free = 1;
 
-    KERN_DEBUG("[heap] Memory freed at 0x%X (%u bytes)\n", (u32)ptr, header->size);
+    KLOG(LOG_LEVEL_DEBUG, "[heap] Memory freed at 0x%X (%u bytes)\n", (u32)ptr, header->size);
 
     // Coalesce adjacent free blocks
     heap_header_t* current = free_list;

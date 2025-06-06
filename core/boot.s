@@ -36,8 +36,11 @@ mboot:
 [EXTERN start_kernel]           ; This is the entry point of our C code
 
 _start:
+  push    esp
   push    ebx                   ; Load multiboot header location
-  call    clear_screen        ; clear screen
+  call    clear_screen        	; clear screen
+  
+  ; Set up temporary stack (physical, identity mapped before paging)
   
   ; Execute the kernel:
   cli                         ; Disable interrupts.

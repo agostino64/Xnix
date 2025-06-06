@@ -1,7 +1,7 @@
 // timer.c -- Initialises the PIT, and handles clock updates.
 // Written for JamesM's kernel development tutorials.
 
-#include <xnix/timer.h>
+#include <xnix/drivers/timer.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
 #include <xnix/drv_register.h>

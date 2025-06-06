@@ -6,6 +6,7 @@
  */
 
 #include <xnix/common.h>
+#include <xnix/drivers/serial.h>
 
 // Color definitions (foreground: black, background: light grey)
 #define FOREGROUND 0
@@ -293,4 +294,3 @@ void printk(const char* fmt, ...)
     vprintk(fmt, args);
     va_end(args);
 }
-

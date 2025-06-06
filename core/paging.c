@@ -12,6 +12,7 @@
 #include <xnix/heap.h>
 #include <xnix/common.h>
 #include <xnix/vga.h>
+#include <xnix/log.h>
 
 // Page flags for access control and status
 #define PAGE_PRESENT    0x1    // Page is present in memory
@@ -58,7 +59,7 @@ void map_page(u32 virtual_addr, u32 physical_addr) {
     } else {
         page_table = alloc_page_table();
         if (!page_table) {
-            KERN_ERR("[paging] ERROR: Out of page table slabs\n");
+            KLOG(LOG_LEVEL_ERROR, "[paging] ERROR: Out of page table slabs\n");
             return;
         }
         page_directory[pd_idx] = ((u32)page_table) | PAGE_PRESENT | PAGE_RW;
@@ -84,10 +85,10 @@ void init_paging(void) {
     // Map virtual heap address to physical memory
     map_range(HEAP_VIRT_ADDR, HEAP_PHYS_ADDR, HEAP_SIZE);
 
-    KERN_DEBUG("[paging] Page directory at 0x%X\n", (u32)page_directory);
-    KERN_DEBUG("[paging] Mapped heap: 0xC0000000 -> 0x%X (%u bytes)\n", HEAP_PHYS_ADDR, HEAP_SIZE);
+    KLOG(LOG_LEVEL_DEBUG, "[paging] Page directory at 0x%X\n", (u32)page_directory);
+    KLOG(LOG_LEVEL_DEBUG, "[paging] Mapped heap: 0xC0000000 -> 0x%X (%u bytes)\n", HEAP_PHYS_ADDR, HEAP_SIZE);
 
     enable_paging();
-    KERN_DEBUG("[paging] Paging enabled.\n");
+    KLOG(LOG_LEVEL_DEBUG, "[paging] Paging enabled.\n");
 }
 
