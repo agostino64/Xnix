@@ -36,10 +36,16 @@ mboot:
 [EXTERN start_kernel]           ; This is the entry point of our C code
 
 _start:
-  push    ebx                   ; Load multiboot header location
-  call    clear_screen        ; clear screen
+    call clear_screen		; Initialise the screen (by clearing it)
+    
+    ; Load multiboot information:
+    push esp
+    push ebx
   
-  ; Execute the kernel:
-  cli                         ; Disable interrupts.
-  jmp start_kernel            ; jump our main() function.
+    ; Execute the kernel:
+    cli                         ; Disable interrupts.
+    call start_kernel           ; call our main() function.
+    jmp $                       ; Enter an infinite loop, to stop the processor
+                                ; executing whatever rubbish is in the memory
+                                ; after our kernel!
 

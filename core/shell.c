@@ -10,12 +10,14 @@
 
 #include <xnix/common.h>
 #include <xnix/vga.h>
-#include <xnix/keyb.h>
+#include <xnix/drivers/keyb.h>
 #include <xnix/cpu.h>
 #include <xnix/shell.h>
-#include <xnix/timer.h>
+#include <xnix/drivers/timer.h>
 #include <xnix/isr.h>
 #include <xnix/heap.h>
+#include <xnix/log.h>
+#include <xnix/initrd.h>
 
 // Shell build and version info
 #define XNIX_VERSION "0.1.2-1"
@@ -63,7 +65,7 @@ void help_func(void)
     printk(" cpuinfo     print cpu info\n");
     printk(" xnix        print xnix logo\n");
     printk(" mem         shows the memory allocated for the shell\n");
-    printk(" error       test error\n");
+    printk(" ls          list files/directorys in ramfs\n");
     printk("\nCopyright (C) 2022, 2025 Agustin Gutierrez\n");
 }
 
@@ -135,7 +137,7 @@ void acsii_func(void)
  */
 void error_func(void)
 {
-    KERN_ERR("error test!\n");
+    KLOG(LOG_LEVEL_ERROR, "error test!\n");
 }
 
 /**
@@ -143,7 +145,13 @@ void error_func(void)
  */
 void meminfo_func(void)
 {
+    printk("Kernel memory usage %u bytes\n", get_memory_usage());
     printk("Shell buffer size: %u bytes\n", current_size);
+}
+
+void list_fs(void)
+{
+    list_initrd();
 }
 
 /**
@@ -160,7 +168,7 @@ void cmd_init(void)
         { "cpuinfo", cpuinfo_func },
         { "xnix", acsii_func },
         { "mem", meminfo_func },
-        { "error", error_func }
+        { "ls", list_fs }
     };
 
     exec_cmd(cmds, sizeof(cmds) / sizeof(cmds[0]));
@@ -175,19 +183,18 @@ void init_shell(void)
 {
     if (cmd == NULL)
         cmd = (char*)kmalloc(current_size);
-
+        
     while (1)
-    {
-        current_size = INITIAL_SIZE; // Restart memory size
+    {     
         write(">> ");  // Prompt
         gets();         // Wait for input (populates buffer2)
         char* input = get_input_buffer();
-        u32 input_len = strlen(input);
+        u32 input_len = strlen(input) + 1;  // +1 for null terminator
 
         // Resize buffer if needed
         if (input_len > current_size)
         {
-            char* new_cmd = (char*)krealloc(cmd, current_size, (input_len+1)); // Add 1 for avoid stack overflow
+            char* new_cmd = (char*)krealloc(cmd, current_size, input_len);
             if (new_cmd)
             {
                 cmd = new_cmd;
@@ -195,7 +202,7 @@ void init_shell(void)
             }
             else
             {
-                KERN_ERR("ERROR: Could not expand buffer\n");
+                KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
                 continue;
             }
         }
@@ -204,7 +211,7 @@ void init_shell(void)
 
         if (cmd[0] == '\0')  // Empty command, ignore
             continue;
-
+            
         cmd_init();  // Try to run the command
     }
 }

@@ -1,93 +1,355 @@
-/*
- *  Xnix
- *
- *  Copyright (C) 2025  Agustin Gutierrez
- *
- *  Implements x86 paging with dynamic allocation of page tables.
- *  Provides basic identity mapping and virtual heap support using slab-style allocation.
- *  Enables page-level memory isolation and supports runtime expansion of page tables.
- */
- 
+// paging.c -- Defines the interface for and structures relating to paging.
+//             Written for JamesM's kernel development tutorials.
+
 #include <xnix/paging.h>
 #include <xnix/heap.h>
 #include <xnix/common.h>
 #include <xnix/vga.h>
+#include <xnix/log.h>
+#include <xnix/cpu.h>
+#include <xnix/panic.h>
 
-// Page flags for access control and status
-#define PAGE_PRESENT    0x1    // Page is present in memory
-#define PAGE_RW         0x2    // Page is writable
-#define PAGE_USER       0x4    // Page is accessible from user mode (not used here)
+// The kernel's page directory
+page_directory_t *kernel_directory=0;
 
-// Paging structure base addresses
-#define KERNEL_PAGE_DIR 0x9C000        // Physical address of the page directory
+// The current page directory;
+page_directory_t *current_directory=0;
 
-// Pointer to the page directory
-static u32* page_directory = (u32*)KERNEL_PAGE_DIR;
+// A bitset of frames - used or free.
+u32 *frames;
+u32 nframes;
 
-// Slab-style pool of pre-allocated page tables
-#define MAX_PAGE_TABLES 16
-static u32* page_table_pool[MAX_PAGE_TABLES];
-static int next_free_pt = 0;
+volatile u32 memsize = 0;
 
-// Allocates a new page table from the slab pool
-static u32* alloc_page_table(void) {
-    if (next_free_pt >= MAX_PAGE_TABLES) return NULL;
-    u32* pt = (u32*)(0x9D000 + next_free_pt * PAGE_SIZE);
-    memset(pt, 0, PAGE_SIZE);
-    page_table_pool[next_free_pt++] = pt;
-    return pt;
+// Defined in kheap.c
+extern u32 placement_address;
+extern heap_t *kheap;
+
+// Defined in process.asm
+extern void copy_page_physical(unsigned int src,unsigned int page);
+
+// Macros used in the bitset algorithms.
+#define INDEX_FROM_BIT(a) (a/(8*4))
+#define OFFSET_FROM_BIT(a) (a%(8*4))
+
+// Static function to set a bit in the frames bitset
+static void set_frame(u32 frame_addr)
+{
+    u32 frame = frame_addr/0x1000;
+    u32 idx = INDEX_FROM_BIT(frame);
+    u32 off = OFFSET_FROM_BIT(frame);
+    frames[idx] |= (0x1 << off);
+    KLOG(LOG_LEVEL_DEBUG, "Set frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
 }
 
-// Enables paging by setting CR3 and CR0 register values
-void enable_paging(void) {
-    __asm__ __volatile__ ("mov %0, %%cr3" :: "r"(page_directory));
-    u32 cr0;
-    __asm__ __volatile__ ("mov %%cr0, %0" : "=r"(cr0));
-    cr0 |= 0x80000000;  // Set paging enable bit
-    __asm__ __volatile__ ("mov %0, %%cr0" :: "r"(cr0));
+// Static function to clear a bit in the frames bitset
+static void clear_frame(u32 frame_addr)
+{
+    u32 frame = frame_addr/0x1000;
+    u32 idx = INDEX_FROM_BIT(frame);
+    u32 off = OFFSET_FROM_BIT(frame);
+    frames[idx] &= ~(0x1 << off);
+    KLOG(LOG_LEVEL_DEBUG, "Cleared frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
 }
 
-// Maps a single virtual address to a physical address
-void map_page(u32 virtual_addr, u32 physical_addr) {
-    u32 pd_idx = PAGE_DIRECTORY_INDEX(virtual_addr);
-    u32 pt_idx = PAGE_TABLE_INDEX(virtual_addr);
-
-    u32* page_table;
-    if (page_directory[pd_idx] & PAGE_PRESENT) {
-        page_table = (u32*)(page_directory[pd_idx] & ~0xFFF);
-    } else {
-        page_table = alloc_page_table();
-        if (!page_table) {
-            KERN_ERR("[paging] ERROR: Out of page table slabs\n");
-            return;
+// Static function to find the first free frame.
+static u32 first_frame(void)
+{
+    u32 i, j;
+    for (i = 0; i < INDEX_FROM_BIT(nframes); i++)
+    {
+        if (frames[i] != 0xFFFFFFFF)
+        {
+            for (j = 0; j < 32; j++)
+            {
+                u32 toTest = 0x1 << j;
+                if ( !(frames[i]&toTest) )
+                {
+                    KLOG(LOG_LEVEL_DEBUG, "First free frame: %d\n", i*4*8+j);
+                    return i*4*8+j;
+                }
+            }
         }
-        page_directory[pd_idx] = ((u32)page_table) | PAGE_PRESENT | PAGE_RW;
+    }
+    KLOG(LOG_LEVEL_ERROR, "No free frames available!\n");
+    return (u32)-1;
+}
+
+void alloc_frame(page_t *page, int is_kernel, int is_writeable)
+{
+    if (page->frame != 0)
+        return;
+    else
+    {
+        u32 idx = first_frame();
+        if (idx == (u32)-1)
+        {
+            //panic("no free frames!!");
+        }
+        set_frame(idx*0x1000);
+        page->present = 1;
+        page->rw = (is_writeable==1)?1:0;
+        page->user = (is_kernel==1)?0:1;
+        page->frame = idx;
+        KLOG(LOG_LEVEL_DEBUG, "Allocated frame: %u to page entry\n", idx);
+    }
+}
+
+void free_frame(page_t *page)
+{
+    u32 frame;
+    if (!(frame=page->frame))
+        return;
+    else
+    {
+        clear_frame(frame);
+        page->frame = 0x0;
+        KLOG(LOG_LEVEL_DEBUG, "Freed frame: 0x%X\n", frame);
+    }
+}
+
+void init_paging(unsigned int memorysz)
+{
+    // The size of physical memory.
+    u32 mem_end_page = memorysz;
+    memsize = memorysz;
+    
+    nframes = mem_end_page / 0x1000;
+    frames = (u32*)kmalloc(INDEX_FROM_BIT(nframes));
+    memset((u8*)frames, 0, INDEX_FROM_BIT(nframes));
+    
+    // Let's make a page directory.
+    //u32 phys;
+    kernel_directory = (page_directory_t*)kmalloc_a(sizeof(page_directory_t));
+    memset((u8*)kernel_directory, 0, sizeof(page_directory_t));
+    kernel_directory->physicalAddr = (u32)kernel_directory->tablesPhysical;
+
+    // Map some pages in the kernel heap area.
+    // Here we call get_page but not alloc_frame. This causes page_table_t's 
+    // to be created where necessary. We can't allocate frames yet because they
+    // they need to be identity mapped first below, and yet we can't increase
+    // placement_address between identity mapping and enabling the heap!
+    int i = 0;
+    for (i = KHEAP_START; i < KHEAP_START+KHEAP_INITIAL_SIZE; i += 0x1000)
+        get_page(i, 1, kernel_directory);
+
+    // We need to identity map (phys addr = virt addr) from
+    // 0x0 to the end of used memory, so we can access this
+    // transparently, as if paging wasn't enabled.
+    // NOTE that we use a while loop here deliberately.
+    // inside the loop body we actually change placement_address
+    // by calling kmalloc(). A while loop causes this to be
+    // computed on-the-fly rather than once at the start.
+    // Allocate a lil' bit extra so the kernel heap can be
+    // initialised properly.
+    i = 0;
+    while (i < placement_address+0x1000)
+    {
+        // Kernel code is readable but not writeable from userspace.
+        alloc_frame( get_page(i, 1, kernel_directory), 0, 0);
+        i += 0x1000;
     }
 
-    page_table[pt_idx] = (physical_addr & ~0xFFF) | PAGE_PRESENT | PAGE_RW;
+    // Now allocate those pages we mapped earlier.
+    for (i = KHEAP_START; i < KHEAP_START+KHEAP_INITIAL_SIZE; i += 0x1000)
+        alloc_frame( get_page(i, 1, kernel_directory), 0, 0);
+
+    
+    // Before we enable paging, we must register our page fault handler.
+    register_interrupt_handler(14, &page_fault);
+
+    // Now, enable paging!
+    switch_page_directory(kernel_directory);
+
+    // Initialise the kernel heap.
+    kheap = create_heap(KHEAP_START, KHEAP_START+KHEAP_INITIAL_SIZE, KHEAP_START+KHEAP_MAX_ADDRESS, 0, 0);
+    expand(0x400000, kheap); // Allocate some more space
+    
+    current_directory = clone_directory(kernel_directory);
+    switch_page_directory(current_directory);
 }
 
-// Maps a range of contiguous virtual addresses to physical addresses
-void map_range(u32 vaddr_start, u32 paddr_start, u32 size) {
-    for (u32 offset = 0; offset < size; offset += PAGE_SIZE) {
-        map_page(vaddr_start + offset, paddr_start + offset);
+void switch_page_directory(page_directory_t *dir)
+{
+    current_directory = dir;
+    __asm__ __volatile__("mov %0, %%cr3":: "r"(dir->physicalAddr));
+    u32 cr0;
+    __asm__ __volatile__("mov %%cr0, %0": "=r"(cr0));
+    cr0 |= 0x80000000; // Enable paging!
+    __asm__ __volatile__("mov %0, %%cr0":: "r"(cr0));
+}
+
+page_t *get_page(u32 address, int make, page_directory_t *dir)
+{
+    // Turn the address into an index.
+    address /= 0x1000;
+    // Find the page table containing this address.
+    u32 table_idx = address / 1024;
+
+    if (dir->tables[table_idx]) // If this table is already assigned
+    {
+        return &dir->tables[table_idx]->pages[address%1024];
+    }
+    else if(make)
+    {
+        u32 tmp;
+        dir->tables[table_idx] = (page_table_t*)kmalloc_ap(sizeof(page_table_t), &tmp);
+        memset((u8*)dir->tables[table_idx], 0, 0x1000);
+        dir->tablesPhysical[table_idx] = tmp | 0x7; // PRESENT, RW, US.
+        return &dir->tables[table_idx]->pages[address%1024];
+    }
+    else
+    {
+        return 0;
     }
 }
 
-// Initializes paging, sets up identity and heap mappings, and enables paging
-void init_paging(void) {
-    memset(page_directory, 0, PAGE_SIZE);
 
-    // Identity map 0x00000000 to 0x003FFFFF (4MB)
-    map_range(0x00000000, 0x00000000, 0x400000);
+void page_fault(registers_t regs)
+{
+    __asm__ __volatile__ ("cli");
+    
+    // A page fault has occurred.
+    // The faulting address is stored in the CR2 register.
+    u32 faulting_address;
+    __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
+    
+    // The error code gives us details of what happened.
+    int present   = !(regs.err_code & 0x1); // Page not present
+    int rw = regs.err_code & 0x2;           // Write operation?
+    int us = regs.err_code & 0x4;           // Processor was in user-mode?
+    int reserved = regs.err_code & 0x8;     // Overwritten CPU-reserved bits of page entry?
+    //int id = regs.err_code & 0x10;          // Caused by an instruction fetch?
+    
+    u32 cr2;
+    __asm__ __volatile__("mov %%cr2, %0": "=r"(cr2));
 
-    // Map virtual heap address to physical memory
-    map_range(HEAP_VIRT_ADDR, HEAP_PHYS_ADDR, HEAP_SIZE);
-
-    KERN_DEBUG("[paging] Page directory at 0x%X\n", (u32)page_directory);
-    KERN_DEBUG("[paging] Mapped heap: 0xC0000000 -> 0x%X (%u bytes)\n", HEAP_PHYS_ADDR, HEAP_SIZE);
-
-    enable_paging();
-    KERN_DEBUG("[paging] Paging enabled.\n");
+    // Output an error message.
+    printk("Page fault! (");
+    if (present) {printk("page not present ");}
+    if (rw) {printk("read-only ");}
+    if (us) {printk("user-mode ");}
+    if (reserved) {printk("reserved ");}
+    printk("\b) at 0x%x - EIP: %x \n",faulting_address,regs.eip);
+    
+    if(!strcmp((char*)regs.eip,(char*)cr2))
+    	printk("Page fault caused by executing unpaged memory\n");
+    else
+    	printk("Page fault caused by reading unpaged memory\n");
+    
+    
+    if(current_directory != kernel_directory)
+    {
+    	//printk("Killing task %d\n",getpid());
+    	panic(&regs, "Task fault");
+    }
+    //else
+    	//PANIC("Page fault");
 }
 
+static page_table_t *clone_table(page_table_t *src, u32 *physAddr)
+{
+    // Make a new page table, which is page aligned.
+    page_table_t *table = (page_table_t*)kmalloc_ap(sizeof(page_table_t), physAddr);
+    // Ensure that the new table is blank.
+    memset((u8*)table, 0, sizeof(page_directory_t));
+
+    // For every entry in the table...
+    int i;
+    for (i = 0; i < 1024; i++)
+    {
+        // If the source entry has a frame associated with it...
+        if (src->pages[i].frame)
+        {
+            // Get a new frame.
+            alloc_frame(&table->pages[i], 0, 0);
+            // Clone the flags from source to destination.
+            if (src->pages[i].present) table->pages[i].present = 1;
+            if (src->pages[i].rw) table->pages[i].rw = 1;
+            if (src->pages[i].user) table->pages[i].user = 1;
+            if (src->pages[i].accessed) table->pages[i].accessed = 1;
+            if (src->pages[i].dirty) table->pages[i].dirty = 1;
+            // Physically copy the data across. This function is in process.s.
+            copy_page_physical(src->pages[i].frame*0x1000, table->pages[i].frame*0x1000);
+        }
+    }
+    return table;
+}
+
+page_directory_t *clone_directory(page_directory_t *src)
+{
+    u32 phys;
+    // Make a new page directory and obtain its physical address.
+    page_directory_t *dir = (page_directory_t*)kmalloc_ap(sizeof(page_directory_t), &phys);
+    // Ensure that it is blank.
+    memset((u8*)dir, 0, sizeof(page_directory_t));
+
+    // Get the offset of tablesPhysical from the start of the page_directory_t structure.
+    u32 offset = (u32)dir->tablesPhysical - (u32)dir;
+
+    // Then the physical address of dir->tablesPhysical is:
+    dir->physicalAddr = phys + offset;
+
+    // Go through each page table. If the page table is in the kernel directory, do not make a new copy.
+    int i;
+    for (i = 0; i < 1024; i++)
+    {
+        if (!src->tables[i])
+            continue;
+
+        if (kernel_directory->tables[i] == src->tables[i])
+        {
+            // It's in the kernel, so just use the same pointer.
+            dir->tables[i] = src->tables[i];
+            dir->tablesPhysical[i] = src->tablesPhysical[i];
+        }
+        else
+        {
+            // Copy the table.
+            u32 phys;
+            dir->tables[i] = clone_table(src->tables[i], &phys);
+            dir->tablesPhysical[i] = phys | 0x07;
+        }
+    }
+    return dir;
+}
+
+void map_pages(long addr, long size, int rw, int user)
+{
+    long i = addr;
+    while (i < (addr+size+0x1000))
+    {
+         if(i+size < memsize)
+              set_frame(i); // Tell the frame bitmap that this frame is now used!
+         page_t *page = get_page(i, 1, current_directory);
+         page->present = 1;
+         page->rw = rw;
+         page->user = user;
+         page->frame = i / 0x1000;
+         i += 0x1000;
+    }
+    return;
+}
+
+void virtual_map_pages(long addr, long size, int rw, int user)
+{
+    long i = addr;
+    while (i < (addr+size+0x1000))
+    {
+         if(i+size < memsize)
+         {
+              //Find first free frame
+              set_frame(first_frame());
+              //Then we set the space to taken anyway
+              kmalloc(0x1000);
+         }
+
+         page_t *page = get_page(i, 1, current_directory);
+         page->present = 1;
+         page->rw = rw;
+         page->user = user;
+         page->frame = i / 0x1000;
+         i += 0x1000;
+    }
+    return;
+}

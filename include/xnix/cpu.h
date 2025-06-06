@@ -9,3 +9,4 @@ void halt(void);
 
 void reboot(void);
 void shutdown(void);
+

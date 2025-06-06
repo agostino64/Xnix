@@ -13,6 +13,7 @@
 #include <xnix/vga.h>
 #include <xnix/drv_register.h>
 #include <xnix/drv_control.h>
+#include <xnix/log.h>
 
 extern u32 cursor_y, cursor_x;
 
@@ -77,6 +78,7 @@ unsigned char kbdus[128] = {
 static void keyboard_handler(registers_t regs)
 {
     unsigned char scancode = inb(0x60);
+    //KLOG(LOG_LEVEL_DEBUG, "Keyboard IRQ1 received, scancode=0x%02x\n", scancode);
 
     switch (scancode)
     {
@@ -85,21 +87,25 @@ static void keyboard_handler(registers_t regs)
             ltmp |= 4;        // Caps bit
             outb(0x60, ltmp);
             caps_flag = !caps_flag;
+            KLOG(LOG_LEVEL_DEBUG, "Caps Lock toggled: %d\n", caps_flag);
             break;
 
         case 0x45: // Num Lock
             outb(0x60, 0xED);
             ltmp |= 2;
             outb(0x60, ltmp);
+            KLOG(LOG_LEVEL_DEBUG, "Num Lock toggled\n");
             break;
 
         case 0x46: // Scroll Lock
             outb(0x60, 0xED);
             ltmp |= 1;
             outb(0x60, ltmp);
+            KLOG(LOG_LEVEL_DEBUG, "Scroll Lock toggled\n");
             break;
 
         case 60: // F12 (placeholder for reboot or other feature)
+            KLOG(LOG_LEVEL_INFO, "F12 pressed (custom action placeholder)\n");
             // reboot();
             break;
 
@@ -108,31 +114,42 @@ static void keyboard_handler(registers_t regs)
     }
 
     if (scancode & 0x80) {
-        // Key release (bit 7 set)
-        if (scancode - 0x80 == 42 || scancode - 0x80 == 54)
-            shift_flag = 0; // Left/Right Shift released
+        // Key release
+        unsigned char released = scancode - 0x80;
+        if (released == 42 || released == 54)
+        {
+            shift_flag = 0;
+            KLOG(LOG_LEVEL_DEBUG, "Shift key released\n");
+        }
     } else {
         // Key press
         if (scancode == 42 || scancode == 54) {
             shift_flag = 1;
+            KLOG(LOG_LEVEL_DEBUG, "Shift key pressed\n");
             return;
         }
 
-        // Enter key
-        if (kbdus[scancode] == '\n') {
-            if (gets_flag == 0) do_gets(); // Transfer buffer
-            gets_flag++;
-            while (kb_count) buffer[kb_count--] = 0; // Clear buffer
-        }
-        else {
-            if (kbdus[scancode] == '\b') {
-                if (kb_count) buffer[kb_count--] = 0;
-            } else {
-                buffer[kb_count++] = kbdus[scancode];
+        char key = kbdus[scancode];
+
+        if (key == '\n') {
+            if (gets_flag == 0) {
+                KLOG(LOG_LEVEL_DEBUG, "Enter key pressed, capturing input buffer\n");
+                do_gets();
             }
+            gets_flag++;
+            while (kb_count) buffer[kb_count--] = 0;
+        }
+        else if (key == '\b') {
+            if (kb_count) {
+                buffer[kb_count--] = 0;
+                KLOG(LOG_LEVEL_DEBUG, "Backspace: removed one character, new count = %d\n", kb_count);
+            }
+        } else {
+            buffer[kb_count++] = key;
+            KLOG(LOG_LEVEL_DEBUG, "Key pressed: '%c' (scancode=0x%02x), count=%d\n", key, scancode, kb_count);
         }
 
-        put(kbdus[scancode]); // Echo character to screen
+        put(key); // Echo character to screen
         return;
     }
 }
@@ -144,6 +161,7 @@ static void keyboard_handler(registers_t regs)
 static int init_keyboard(void)
 {
     register_interrupt_handler(IRQ1, &keyboard_handler);
+    KLOG(LOG_LEVEL_INFO, "Keyboard driver initialized and IRQ1 handler registered.\n");
     return 0;
 }
 

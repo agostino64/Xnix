@@ -1,8 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-// Some nice typedefs, to standardise sizes across platforms.
-// These typedefs are written for 32-bit X86.
+#include "drivers/serial.h"  // for printk_serial
+
+// Tipos estándar para 32-bit
 typedef unsigned int   u32;
 typedef          int   s32;
 typedef unsigned short u16;
@@ -13,30 +14,21 @@ typedef          char  s8;
 // stddef
 typedef char* va_list;
 
+extern void panic_assert(const char *file, u32 line, const char* message);
+
 #define va_start(ap, last_arg) ((void)((ap) = (va_list)&(last_arg) + sizeof(last_arg)))
 #define va_arg(ap, type) (*(type*)((ap) += sizeof(type), (ap) - sizeof(type)))
 #define va_end(ap) ((void)(ap = (va_list)0))
 
-// stdbool
+// Boolean
 #define bool _Bool
 #define true 1
 #define false 0
 #define __bool_true_false_are_defined 1
-
-// stddef
+// NULL
 #define NULL ((void *)0)
 
-#define KERN_ERR(format, ...) \
-	printk("%s [%s] (%d): " format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-	
-// Control debug logging with DEBUG flag
-#ifdef DEBUG
-    #define KERN_DEBUG(format, ...) \
-        printk("%s [%s] (%d): DEBUG: " format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#else
-    // When DEBUG is not defined, KERN_DEBUG does nothing
-    #define KERN_DEBUG(format, ...) ((void)0)
-#endif
+#define ASSERT(b) ((b) ? (void)0 : panic_assert(__FILE__, __LINE__, #b))
 
 void outb(u16 port, u8 value);
 void outw(u16 port, u16 value);
@@ -50,3 +42,4 @@ char* strcpy(char* dest, const char* src);
 unsigned int strlen(const char *str);
 
 #endif
+

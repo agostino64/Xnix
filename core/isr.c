@@ -7,6 +7,8 @@
 #include <xnix/common.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
+#include <xnix/log.h>
+#include <xnix/cpu.h>
 
 isr_t interrupt_handlers[256];
 
@@ -18,7 +20,8 @@ void register_interrupt_handler(u8 n, isr_t handler)
 // This gets called from our ASM interrupt handler stub.
 void isr_handler(registers_t regs)
 {
-   printk("INT:0x%x\n", regs.int_no);
+   KLOG(LOG_LEVEL_ERROR, "GPF (INT 0x0D) at EIP=0x%X, error code=0x%X\n", regs.eip, regs.err_code);
+   halt();
 }
 
 // This gets called from our ASM interrupt handler stub.

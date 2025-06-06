@@ -1,182 +1,468 @@
-/*
- *  Xnix
- *
- *  Copyright (C) 2025  Agustin Gutierrez
- *
- *  Simple kernel heap allocator for Xnix operating system.
- *  Provides basic dynamic memory management functions: kmalloc, kfree, krealloc.
- *  Works on a single, contiguous memory region mapped by the kernel.
- */
+// heap.c -- Kernel heap functions, also provides
+//            a placement malloc() for use before the heap is 
+//            initialised.
+//            Written for JamesM's kernel development tutorials.
 
 #include <xnix/heap.h>
 #include <xnix/vga.h>
 #include <xnix/common.h>
+#include <xnix/log.h>
 
-// Heap starts at a high virtual address mapped by paging.
-// HEAP_START is defined externally via paging.
-#define HEAP_START HEAP_VIRT_ADDR
-#define HEAP_INITIAL_SIZE HEAP_SIZE
+// end is defined in the linker script.
+extern u32 end;
+u32 placement_address = (u32)&end;
+extern page_directory_t *kernel_directory;
+heap_t *kheap=0;
 
-// Global heap pointers
-static heap_header_t* heap_start = (heap_header_t*)HEAP_START;  // First heap block
-static heap_header_t* free_list = NULL;                         // Pointer to free list
+//Physical memory used
+volatile u32 phys_mem_usage;
 
-/**
- * Initializes the heap by creating a single large free block.
- * Should be called once at kernel startup.
- */
-void init_heap(void) {
-    heap_start->size = HEAP_INITIAL_SIZE - sizeof(heap_header_t);
-    heap_start->is_free = 1;
-    heap_start->next = NULL;
-    free_list = heap_start;
+u32 kmalloc_int(u32 sz, int align, u32 *phys)
+{
+    KLOG(LOG_LEVEL_DEBUG, "kmalloc_int requested size %u, align %d\n", sz, align);
 
-    KERN_DEBUG("[heap] Initialized at 0x%X with size %u bytes\n", (u32)heap_start, heap_start->size);
-}
-
-/**
- * Splits a block if it's significantly larger than requested size,
- * and marks the allocated block as used.
- *
- * @param block Pointer to the heap block to allocate from.
- * @param size  Number of bytes requested by the caller.
- * @return Pointer to usable memory (after the block header).
- */
-static void* allocate_block(heap_header_t* block, u32 size) {
-    if (block->size > size + sizeof(heap_header_t)) {
-        // Split the block and create a new free block
-        heap_header_t* new_block = (heap_header_t*)((u8*)block + sizeof(heap_header_t) + size);
-        new_block->size = block->size - size - sizeof(heap_header_t);
-        new_block->is_free = 1;
-        new_block->next = block->next;
-
-        block->size = size;
-        block->next = new_block;
-
-        KERN_DEBUG("[heap] Block split at 0x%X\n", (u32)new_block);
-    }
-
-    block->is_free = 0;
-    return (void*)((u8*)block + sizeof(heap_header_t));
-}
-
-/**
- * Allocates memory from the kernel heap.
- *
- * @param size Number of bytes to allocate.
- * @return Pointer to allocated memory or NULL on failure.
- */
-void* kmalloc(u32 size) {
-    heap_header_t* current = free_list;
-    while (current) {
-        if (current->is_free && current->size >= size) {
-            void* ptr = allocate_block(current, size);
-            KERN_DEBUG("[heap] Allocated %u bytes at 0x%X\n", size, (u32)ptr);
-            return ptr;
+    if (kheap != 0)
+    {
+        void *addr = alloc(sz, (u8)align, kheap);
+        if (phys != 0)
+        {
+            page_t *page = get_page((u32)addr, 0, kernel_directory);
+            *phys = page->frame*0x1000 + ((u32)addr&0xFFF);
+            KLOG(LOG_LEVEL_DEBUG, "Physical address allocated: 0x%X\n", *phys);
         }
-        current = current->next;
+        phys_mem_usage += sz;
+        KLOG(LOG_LEVEL_INFO, "Allocated %u bytes on heap at 0x%X\n", sz, (u32)addr);
+        return (u32)addr;
+    }
+    else
+    {
+        if (align == 1 && (placement_address & 0xFFFFF000) )
+        {
+            // Align the placement address;
+            placement_address &= 0xFFFFF000;
+            placement_address += 0x1000;
+            KLOG(LOG_LEVEL_DEBUG, "Placement address aligned to 0x%X\n", placement_address);
+        }
+        if (phys)
+        {
+            *phys = placement_address;
+        }
+        u32 tmp = placement_address;
+        placement_address += sz;
+        phys_mem_usage += sz;
+        KLOG(LOG_LEVEL_INFO, "Placement malloc %u bytes at 0x%X\n", sz, tmp);
+        return tmp;
+    }
+}
+
+void kfree(void *p)
+{
+     if(kheap != 0)
+     {
+         free(p, kheap);
+     } else {
+         return;
+     }
+}
+
+u32 kmalloc_a(u32 sz)
+{
+    return kmalloc_int(sz, 1, 0);
+}
+
+u32 kmalloc_p(u32 sz, u32 *phys)
+{
+    return kmalloc_int(sz, 0, phys);
+}
+
+u32 kmalloc_ap(u32 sz, u32 *phys)
+{
+    return kmalloc_int(sz, 1, phys);
+}
+
+u32 kmalloc(u32 sz)
+{
+    return kmalloc_int(sz, 0, 0);
+}
+
+void expand(u32 new_size, heap_t *heap)
+{
+     
+    // Sanity check.
+    ASSERT(new_size > heap->end_address - heap->start_address);
+
+    // Get the nearest following page boundary.
+    if ((new_size&0xFFFFF000) != 0)
+    {
+        new_size &= 0xFFFFF000;
+        new_size += 0x1000;
     }
 
-    KERN_ERR("[heap] ERROR: Out of memory\n");
-    return NULL;
+    // Make sure we are not overreaching ourselves.
+    ASSERT(heap->start_address+new_size <= heap->max_address);
+
+    // This should always be on a page boundary.
+    u32 old_size = heap->end_address-heap->start_address;
+
+    u32 i = old_size;
+    while (i < new_size)
+    {
+        alloc_frame( get_page(heap->start_address+i, 1, kernel_directory),
+                     (heap->supervisor)?1:0, (heap->readonly)?0:1);
+        i += 0x1000 /* page size */;
+    }
+    heap->end_address = heap->start_address+new_size;
 }
 
-/**
- * Allocates memory and zeroes it.
- *
- * @param size Number of bytes to allocate.
- * @return Zeroed memory pointer or NULL on failure.
- */
-void* kmalloc_zero(u32 size) {
-    void* ptr = kmalloc(size);
-    if (ptr) memset(ptr, 0, size);
-    return ptr;
+u32 contract(u32 new_size, heap_t *heap)
+{
+    // Sanity check.
+    ASSERT(new_size < heap->end_address-heap->start_address);
+
+    // Get the nearest following page boundary.
+    if (new_size&0x1000)
+    {
+        new_size &= 0x1000;
+        new_size += 0x1000;
+    }
+
+    // Don't contract too far!
+    if (new_size < HEAP_MIN_SIZE)
+        new_size = HEAP_MIN_SIZE;
+
+    u32 old_size = heap->end_address-heap->start_address;
+    u32 i = old_size - 0x1000;
+    while (new_size < i)
+    {
+        free_frame(get_page(heap->start_address+i, 0, kernel_directory));
+        i -= 0x1000;
+    }
+
+    heap->end_address = heap->start_address + new_size;
+    return new_size;
 }
 
-/**
- * Allocates memory with alignment.
- *
- * @param size  Number of bytes to allocate.
- * @param align Alignment in bytes (must be power of two).
- * @return Pointer to aligned memory or NULL on failure.
- */
-void* kmalloc_aligned(u32 size, u32 align) {
-    u32 mask = align - 1;
-    heap_header_t* current = free_list;
+static s32 find_smallest_hole(u32 size, u8 page_align, heap_t *heap)
+{
+    // Find the smallest hole that will fit.
+    u32 iterator = 0;
+    while (iterator < heap->index.size)
+    {
+        header_t *header = (header_t *)lookup_ordered_array(iterator, &heap->index);
+        // If the user has requested the memory be page-aligned
+        if (page_align > 0)
+        {
+            // Page-align the starting point of this header.
+            u32 location = (u32)header;
+            s32 offset = 0;
+            if (((location+sizeof(header_t)) & 0xFFFFF000) != 0)
+                offset = 0x1000 /* page size */  - (location+sizeof(header_t))%0x1000;
+            s32 hole_size = (s32)header->size - offset;
+            // Can we fit now?
+            if (hole_size >= (s32)size)
+                break;
+        }
+        else if (header->size >= size)
+            break;
+        iterator++;
+    }
+    // Why did the loop exit?
+    if (iterator == heap->index.size)
+        return -1; // We got to the end and didn't find anything.
+    else
+        return iterator;
+}
 
-    while (current) {
-        if (current->is_free && current->size >= size) {
-            u32 block_addr = (u32)current + sizeof(heap_header_t);
-            u32 aligned_addr = (block_addr + mask) & ~mask;
-            u32 offset = aligned_addr - block_addr;
+static s8 header_t_less_than(void*a, void *b)
+{
+    return (((header_t*)a)->size < ((header_t*)b)->size)?1:0;
+}
 
-            if (current->size >= size + offset) {
-                if (offset > 0) {
-                    // Split leading misaligned space
-                    heap_header_t* aligned_block = (heap_header_t*)((u8*)current + offset);
-                    aligned_block->size = current->size - offset;
-                    aligned_block->is_free = 1;
-                    aligned_block->next = current->next;
+heap_t *create_heap(u32 start, u32 end_addr, u32 max, u8 supervisor, u8 readonly)
+{
+    heap_t *heap = (heap_t*)kmalloc(sizeof(heap_t));
 
-                    current->size = offset - sizeof(heap_header_t);
-                    current->next = aligned_block;
-                    current = aligned_block;
-                }
-                return allocate_block(current, size);
+    // All our assumptions are made on startAddress and endAddress being page-aligned.
+    ASSERT(start%0x1000 == 0);
+    ASSERT(end_addr%0x1000 == 0);
+    
+    // Initialise the index.
+    heap->index = place_ordered_array( (void*)start, HEAP_INDEX_SIZE, &header_t_less_than);
+    
+    // Shift the start address forward to resemble where we can start putting data.
+    start += sizeof(type_t)*HEAP_INDEX_SIZE;
+
+    // Make sure the start address is page-aligned.
+    if ((start & 0xFFFFF000) != 0)
+    {
+        start &= 0xFFFFF000;
+        start += 0x1000;
+    }
+    // Write the start, end and max addresses into the heap structure.
+    heap->start_address = start;
+    heap->end_address = end_addr;
+    heap->max_address = max;
+    heap->supervisor = supervisor;
+    heap->readonly = readonly;
+
+    // We start off with one large hole in the index.
+    header_t *hole = (header_t *)start;
+    hole->size = end_addr-start;
+    hole->magic = HEAP_MAGIC;
+    hole->is_hole = 1;
+    insert_ordered_array((void*)hole, &heap->index);     
+
+    return heap;
+}
+
+void *alloc(u32 size, u8 page_align, heap_t *heap)
+{
+    KLOG(LOG_LEVEL_DEBUG, "alloc request: size=%u, page_align=%u\n", size, page_align);
+    // Make sure we take the size of header/footer into account.
+    u32 new_size = size + sizeof(header_t) + sizeof(footer_t);
+    // Find the smallest hole that will fit.
+    s32 iterator = find_smallest_hole(new_size, page_align, heap);
+
+    if (iterator == -1) // If we didn't find a suitable hole
+    {
+        KLOG(LOG_LEVEL_WARN, "[heap] No suitable hole found for size %u, expanding heap\n", new_size);
+        //some data we need
+        u32 old_length = heap->end_address - heap->start_address;
+        u32 old_end_address = heap->end_address;
+
+        //expand the heap
+        expand(old_length+new_size, heap);
+        u32 new_length = heap->end_address-heap->start_address;
+
+        //we need to find the last header
+        iterator = 0;
+        //these hold the data for the last header so far
+        u32 idx = -1; u32 value = 0x0;
+        while (iterator < heap->index.size)
+        {
+            u32 tmp = (u32)lookup_ordered_array(iterator, &heap->index);
+            if (tmp > value)
+            {
+                value = tmp;
+                idx = iterator;
             }
+            iterator++;
         }
-        current = current->next;
+
+        //we didnt find a header, add one
+        if (idx == -1)
+        {
+            header_t *header = (header_t *)old_end_address;
+            header->magic = HEAP_MAGIC;
+            header->size = new_length - old_length;
+            header->is_hole = 1;
+            footer_t *footer = (footer_t *) (old_end_address + header->size - sizeof(footer_t));
+            footer->magic = HEAP_MAGIC;
+            footer->header = header;
+            insert_ordered_array((void*)header, &heap->index);
+        }
+        else
+        {
+            // The last header needs adjusting.
+            header_t *header = lookup_ordered_array(idx, &heap->index);
+            header->size += new_length - old_length;
+            // Rewrite the footer.
+            footer_t *footer = (footer_t *) ( (u32)header + header->size - sizeof(footer_t) );
+            footer->header = header;
+            footer->magic = HEAP_MAGIC;
+        }
+        KLOG(LOG_LEVEL_INFO, "[heap] Heap expanded from %u to %u bytes\n", old_length, new_length);
+        // We now have enough space. Recurse, and call the function again.
+        return alloc(size, page_align, heap);
     }
 
-    KERN_ERR("[heap] ERROR: Aligned allocation failed\n");
-    return NULL;
+    header_t *orig_hole_header = (header_t *)lookup_ordered_array(iterator, &heap->index);
+    u32 orig_hole_pos = (u32)orig_hole_header;
+    u32 orig_hole_size = orig_hole_header->size;
+    // Here we work out if we should split the hole we found into two parts.
+    // Is the original hole size - requested hole size less than the overhead for adding a new hole?
+    if (orig_hole_size-new_size < sizeof(header_t)+sizeof(footer_t))
+    {
+        // Then just increase the requested size to the size of the hole we found.
+        size += orig_hole_size-new_size;
+        new_size = orig_hole_size;
+    }
+
+    // If we need to page-align the data, do it now and make a new hole in front of our block.
+    if (page_align && orig_hole_pos&0xFFFFF000)
+    {
+        u32 new_location   = orig_hole_pos + 0x1000 /* page size */ - (orig_hole_pos&0xFFF) - sizeof(header_t);
+        header_t *hole_header = (header_t *)orig_hole_pos;
+        hole_header->size     = 0x1000 /* page size */ - (orig_hole_pos&0xFFF) - sizeof(header_t);
+        hole_header->magic    = HEAP_MAGIC;
+        hole_header->is_hole  = 1;
+        footer_t *hole_footer = (footer_t *) ( (u32)new_location - sizeof(footer_t) );
+        hole_footer->magic    = HEAP_MAGIC;
+        hole_footer->header   = hole_header;
+        orig_hole_pos         = new_location;
+        orig_hole_size        = orig_hole_size - hole_header->size;
+    }
+    else
+    {
+        // Else we don't need this hole any more, delete it from the index.
+        remove_ordered_array(iterator, &heap->index);
+    }
+
+    // Overwrite the original header...
+    header_t *block_header  = (header_t *)orig_hole_pos;
+    block_header->magic     = HEAP_MAGIC;
+    block_header->is_hole   = 0;
+    block_header->size      = new_size;
+    // ...And the footer
+    footer_t *block_footer  = (footer_t *) (orig_hole_pos + sizeof(header_t) + size);
+    block_footer->magic     = HEAP_MAGIC;
+    block_footer->header    = block_header;
+
+    // We may need to write a new hole after the allocated block.
+    // We do this only if the new hole would have positive size...
+    if (orig_hole_size - new_size > 0)
+    {
+        header_t *hole_header = (header_t *) (orig_hole_pos + sizeof(header_t) + size + sizeof(footer_t));
+        hole_header->magic    = HEAP_MAGIC;
+        hole_header->is_hole  = 1;
+        hole_header->size     = orig_hole_size - new_size;
+        footer_t *hole_footer = (footer_t *) ( (u32)hole_header + orig_hole_size - new_size - sizeof(footer_t) );
+        if ((u32)hole_footer < heap->end_address)
+        {
+            hole_footer->magic = HEAP_MAGIC;
+            hole_footer->header = hole_header;
+        }
+        // Put the new hole in the index;
+        insert_ordered_array((void*)hole_header, &heap->index);
+    }
+    KLOG(LOG_LEVEL_INFO, "[heap] Allocated block of size %u at 0x%X\n", new_size, (u32)block_header + sizeof(header_t));
+    // ...And we're done!
+    return (void *) ( (u32)block_header+sizeof(header_t) );
 }
 
-/**
- * Frees memory allocated by kmalloc/kmalloc_aligned.
- *
- * @param ptr Pointer to memory block to free.
- */
-void kfree(void* ptr) {
-    if (!ptr) return;
+void free(void *p, heap_t *heap)
+{
+    // Exit gracefully for null pointers.
+    if (p == 0)
+        return;
 
-    heap_header_t* header = (heap_header_t*)((u8*)ptr - sizeof(heap_header_t));
-    header->is_free = 1;
+    // Get the header and footer associated with this pointer.
+    header_t *header = (header_t*) ( (u32)p - sizeof(header_t) );
+    footer_t *footer = (footer_t*) ( (u32)header + header->size - sizeof(footer_t) );
+    
+    KLOG(LOG_LEVEL_DEBUG, "Memory freed at 0x%X (%u bytes)\n", (u32)p, header->size);
+    
+    phys_mem_usage -= header->size;
 
-    KERN_DEBUG("[heap] Memory freed at 0x%X (%u bytes)\n", (u32)ptr, header->size);
+    // Sanity checks.
+    if(header->magic != HEAP_MAGIC || footer->magic != HEAP_MAGIC)
+         return;
 
-    // Coalesce adjacent free blocks
-    heap_header_t* current = free_list;
-    while (current) {
-        if (current->is_free && current->next && current->next->is_free) {
-            current->size += sizeof(heap_header_t) + current->next->size;
-            current->next = current->next->next;
-        } else {
-            current = current->next;
+    // Make us a hole.
+    header->is_hole = 1;
+
+    // Do we want to add this header into the 'free holes' index?
+    char do_add = 1;
+
+    // Unify left
+    // If the thing immediately to the left of us is a footer...
+    footer_t *test_footer = (footer_t*) ( (u32)header - sizeof(footer_t) );
+    if (test_footer->magic == HEAP_MAGIC &&
+        test_footer->header->is_hole == 1)
+    {
+        u32 cache_size = header->size; // Cache our current size.
+        header = test_footer->header;     // Rewrite our header with the new one.
+        footer->header = header;          // Rewrite our footer to point to the new header.
+        header->size += cache_size;       // Change the size.
+        do_add = 0;                       // Since this header is already in the index, we don't want to add it again.
+    }
+
+    // Unify right
+    // If the thing immediately to the right of us is a header...
+    header_t *test_header = (header_t*) ( (u32)footer + sizeof(footer_t) );
+    if (test_header->magic == HEAP_MAGIC &&
+        test_header->is_hole)
+    {
+        header->size += test_header->size; // Increase our size.
+        test_footer = (footer_t*) ( (u32)test_header + // Rewrite it's footer to point to our header.
+                                    test_header->size - sizeof(footer_t) );
+        footer = test_footer;
+        // Find and remove this header from the index.
+        u32 iterator = 0;
+        while ( (iterator < heap->index.size) &&
+                (lookup_ordered_array(iterator, &heap->index) != (void*)test_header) )
+            iterator++;
+
+        // Make sure we actually found the item.
+        ASSERT(iterator < heap->index.size);
+        // Remove it.
+        remove_ordered_array(iterator, &heap->index);
+    }
+
+    // If the footer location is the end address, we can contract.
+    if ( (u32)footer+sizeof(footer_t) == heap->end_address)
+    {
+        u32 old_length = heap->end_address-heap->start_address;
+        u32 new_length = contract( (u32)header - heap->start_address, heap);
+        // Check how big we will be after resizing.
+        if (header->size - (old_length-new_length) > 0)
+        {
+            // We will still exist, so resize us.
+            header->size -= old_length-new_length;
+            footer = (footer_t*) ( (u32)header + header->size - sizeof(footer_t) );
+            footer->magic = HEAP_MAGIC;
+            footer->header = header;
+        }
+        else
+        {
+            // We will no longer exist :(. Remove us from the index.
+            u32 iterator = 0;
+            while ( (iterator < heap->index.size) &&
+                    (lookup_ordered_array(iterator, &heap->index) != (void*)test_header) )
+                iterator++;
+            // If we didn't find ourselves, we have nothing to remove.
+            if (iterator < heap->index.size)
+                remove_ordered_array(iterator, &heap->index);
         }
     }
+
+    // If required, add us to the index.
+    if (do_add == 1)
+        insert_ordered_array((void*)header, &heap->index);
+
 }
 
-/**
- * Reallocates a memory block with a new size.
- *
- * @param ptr       Pointer to current memory block.
- * @param old_size  Original size of the block.
- * @param new_size  Desired new size.
- * @return Pointer to newly allocated memory or NULL on failure.
- */
-void* krealloc(void* ptr, u32 old_size, u32 new_size) {
-    void* new_ptr = kmalloc(new_size);
-    if (!new_ptr) return NULL;
-
-    // Copy old data to new block
-    for (u32 i = 0; i < old_size && i < new_size; i++) {
-        ((char*)new_ptr)[i] = ((char*)ptr)[i];
+void* krealloc(void* ptr, u32 old_size, u32 new_size)
+{
+    if (!ptr) {
+        return (void*)kmalloc(new_size);
     }
+
+    if (new_size == 0) {
+        kfree(ptr);
+        return NULL;
+    }
+
+    // Allocate new block
+    void* new_ptr = (void*)kmalloc(new_size);
+    if (!new_ptr)
+        return NULL;
+
+    // Copy old data
+    u32 copy_size = old_size;
+    if (new_size < old_size)
+        copy_size = new_size;
+
+    memcpy((u8*)new_ptr, (u8*)ptr, copy_size);
 
     // Free old block
     kfree(ptr);
 
     return new_ptr;
+}
+
+u32 get_memory_usage(void)
+{
+    return phys_mem_usage+(placement_address-0x1000); 
 }
 

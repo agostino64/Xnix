@@ -29,6 +29,9 @@
 #include <xnix/common.h>
 #include <xnix/vga.h>
 #include <xnix/cpu.h>
+#include <xnix/log.h>
+#include <xnix/drivers/serial.h>  // for printk_serial
+#include <xnix/cpu.h>
 
 #define cpuid(in, a, b, c, d) __asm__("cpuid": "=a" (a), "=b" (b), "=c" (c), "=d" (d) : "a" (in));
 

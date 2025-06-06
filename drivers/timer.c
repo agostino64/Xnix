@@ -1,50 +1,78 @@
-// timer.c -- Initialises the PIT, and handles clock updates.
-// Written for JamesM's kernel development tutorials.
+/*
+ *  timer.c -- Initializes the PIT and handles clock ticks.
+ *
+ *  Adapted from JamesM's kernel development tutorials.
+ */
 
-#include <xnix/timer.h>
+#include <xnix/drivers/timer.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
 #include <xnix/drv_register.h>
 #include <xnix/drv_control.h>
+#include <xnix/common.h>
+#include <xnix/log.h>
 
-#define FREQUENCY 50
+#define FREQUENCY 50  // Target frequency in Hz (50Hz = 20ms tick)
 
 u32 tick = 0;
-volatile u32 wait_ticks;
+volatile u32 wait_ticks = 0;
 
+/**
+ * timer_callback - IRQ0 handler, called on each PIT tick.
+ * @regs: register snapshot (unused)
+ */
 static void timer_callback(registers_t regs)
 {
-   tick++;
-   wait_ticks++;
+    tick++;
+    wait_ticks++;
+    
+    if (tick % FREQUENCY == 0) {
+        //KLOG(LOG_LEVEL_DEBUG, "Timer tick %u (1s elapsed)\n", tick);
+    }
 }
 
+/**
+ * timer_wait - Busy-wait for a number of timer ticks.
+ * @ticks: number of ticks to wait (at 50Hz, 50 ticks = 1 second)
+ */
 void timer_wait(u32 ticks)
 {
     wait_ticks = 0;
+    KLOG(LOG_LEVEL_DEBUG, "Waiting for %u ticks\n", ticks);
     while (wait_ticks <= ticks);
+    KLOG(LOG_LEVEL_DEBUG, "Finished waiting %u ticks\n", ticks);
 }
 
+/**
+ * init_timer - Initializes the PIT (Programmable Interval Timer).
+ *
+ * Registers the IRQ0 timer handler and configures the PIT for the defined
+ * frequency (default: 50Hz).
+ *
+ * Return: 0 on success
+ */
 static int init_timer(void)
 {
-   // Firstly, register our timer callback.
-   register_interrupt_handler(IRQ0, &timer_callback);
+    // Register IRQ0 handler
+    register_interrupt_handler(IRQ0, &timer_callback);
+    KLOG(LOG_LEVEL_INFO, "Registered IRQ0 handler for system timer.\n");
 
-   // The value we send to the PIT is the value to divide it's input clock
-   // (1193180 Hz) by, to get our required frequency. Important to note is
-   // that the divisor must be small enough to fit into 16-bits.
-   u32 divisor = 1193180 / FREQUENCY;
+    // Calculate divisor for PIT (1193180 Hz input clock)
+    u32 divisor = 1193180 / FREQUENCY;
 
-   // Send the command byte.
-   outb(0x43, 0x36);
+    // Send command byte to PIT
+    outb(0x43, 0x36);  // Channel 0, LSB/MSB, mode 3, binary
+    KLOG(LOG_LEVEL_DEBUG, "Sending PIT command byte: 0x36\n");
 
-   // Divisor has to be sent byte-wise, so split here into upper/lower bytes.
-   u8 l = (u8)(divisor & 0xFF);
-   u8 h = (u8)( (divisor>>8) & 0xFF );
+    // Send divisor LSB then MSB
+    u8 l = (u8)(divisor & 0xFF);
+    u8 h = (u8)((divisor >> 8) & 0xFF);
+    outb(0x40, l);
+    outb(0x40, h);
 
-   // Send the frequency divisor.
-   outb(0x40, l);
-   outb(0x40, h);
-   return 0;
+    KLOG(LOG_LEVEL_INFO, "PIT initialized to %u Hz (divisor=%u)\n", FREQUENCY, divisor);
+    return 0;
 }
 
 REGISTER_DRIVER(init_timer, DRV_TIMER);
+

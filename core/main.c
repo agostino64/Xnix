@@ -6,8 +6,8 @@
 
 #include <xnix/vga.h>
 #include <xnix/descriptor_tables.h>
-#include <xnix/timer.h>
-#include <xnix/keyb.h>
+#include <xnix/drivers/timer.h>
+#include <xnix/drivers/keyb.h>
 #include <xnix/common.h>
 #include <xnix/cpu.h>
 #include <xnix/shell.h>
@@ -15,63 +15,112 @@
 #include <xnix/heap.h>
 #include <xnix/paging.h>
 #include <xnix/drv_manager.h>
+#include <xnix/log.h>
+#include <xnix/multiboot.h>
+#include <xnix/drivers/serial.h>
+#include <xnix/fs.h>
+#include <xnix/initrd.h>
+#include <xnix/panic.h>
+
+extern u32 placement_address;
+u32 initial_esp;
 
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
- * 
+ *
  * This function initializes core subsystems in order:
- * - Screen
- * - Interrupt Descriptor Table (IDT) & Global Descriptor Table (GDT)
- * - Virtual Memory Paging
- * - Kernel Heap
- * - Interrupts (enabled via STI)
- * - Timer (set to 50Hz)
- * - Keyboard Driver
- * - Interactive Shell
- * 
- * It ends in an infinite loop that halts the CPU.
- * 
- * Note: __attribute__((noreturn)) indicates this function never returns.
+ *  1. Descriptor tables (GDT, IDT)
+ *  2. Serial driver for logging
+ *  3. Memory: paging and heap
+ *  4. Initial RAM disk (initrd)
+ *  5. Timer and keyboard drivers
+ *  6. Shell
+ *
  */
-__attribute__((noreturn)) void start_kernel(void)
-{     
-    printk("Xnix...\n\n");
+void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
+{
+    printk("Xnix Kernel Booting...\n\n");
+    initial_esp = initial_stack;
 
-    // Set up GDT and IDT for protected mode and interrupt handling
-    printk("Init IDT/GDT...\n");
+    // -------------------------------
+    // Step 1: Set up CPU descriptor tables
+    // -------------------------------
+    printk("Initializing GDT/IDT...\n");
     init_descriptor_tables();
-    
-    // Initialize virtual memory and enable paging
-    printk("Init paging...\n");
-    init_paging();  // Sets up basic page tables and enables paging
-    
-    // Set up dynamic memory allocation (kernel heap)
-    printk("Init heap...\n");
-    init_heap();
-    
-    // Enable interrupts globally (sets IF flag)
-    printk("Enable interrupts...\n");
+
+    // -------------------------------
+    // Step 2: Initialize serial driver
+    // -------------------------------
+    printk("Initializing serial driver...\n");
+    if (drv_load(DRV_SERIAL) != 0) {
+        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_SERIAL\n");
+    }
+
+    // -------------------------------
+    // Step 3: Enable interrupts
+    // -------------------------------
+    KLOG(LOG_LEVEL_INFO, "Enabling interrupts...\n");
     sti();
-    
-    // Start the programmable interval timer at 50 Hz (20ms tick)
-    printk("Init Timer driver...\n");
+
+    // -------------------------------
+    // Step 4: Verify and locate initrd
+    // -------------------------------
+    if (mboot_ptr->mods_count == 0) {
+        panic(NULL, "No modules found (initrd missing)!");
+    }
+
+    u32 initrd_location = *(u32*)mboot_ptr->mods_addr;
+    u32 initrd_end      = *(u32*)(mboot_ptr->mods_addr + 4);
+    placement_address   = initrd_end;  // Avoid overwriting initrd
+
+    // -------------------------------
+    // Step 5: Initialize paging & heap
+    // -------------------------------
+    printk("Initializing paging...\n");
+    u32 mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
+    init_paging(mem_bytes);
+    KLOG(LOG_LEVEL_INFO, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
+
+    // Memory allocation test
+    u32 malloc_test = kmalloc(100);
+    if (malloc_test != 0) {
+        KLOG(LOG_LEVEL_INFO, "Heap test successful: allocated 100 bytes at 0x%x\n", (u32)malloc_test);
+        kfree((void*)malloc_test);
+    } else {
+        KLOG(LOG_LEVEL_ERROR, "Heap test failed: kmalloc returned NULL\n");
+    }
+
+    // -------------------------------
+    // Step 6: Load initrd filesystem
+    // -------------------------------
+    printk("Loading initrd...\n");
+    fs_root = initialise_initrd(initrd_location);
+
+    // -------------------------------
+    // Step 7: Initialize timer driver
+    // -------------------------------
+    printk("Initializing timer driver...\n");
     if (drv_load(DRV_TIMER) != 0) {
-        KERN_ERR("DRV_TIMER load failed!\n");
+        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_TIMER\n");
     }
-    
-    // Set up keyboard interrupt handler and input buffer
-    printk("Init keyboard driver...\n");
+
+    // -------------------------------
+    // Step 8: Initialize keyboard driver
+    // -------------------------------
+    printk("Initializing keyboard driver...\n");
     if (drv_load(DRV_KEYBOARD) != 0) {
-        KERN_ERR("DRV_KEYBOARD load failed!\n");
+        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_KEYBOARD\n");
     }
- 
-    // Launch the interactive shell for user input
-    printk("Init shell...\n");
+
+    // -------------------------------
+    // Step 9: Launch shell
+    // -------------------------------
+    printk("Launching shell...\n");
     init_shell();
-    
-    // Infinite loop to halt the CPU when idle
+
+    // Should never return; fallback in case shell exits
     while (1) {
-        halt();
+        __asm__ __volatile__("cli; hlt");
     }
 }
 

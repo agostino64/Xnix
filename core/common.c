@@ -85,4 +85,3 @@ unsigned int strlen(const char *str)
     }
     return (unsigned int)(s - str);
 }
-
