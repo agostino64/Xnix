@@ -8,6 +8,7 @@
 #include <xnix/log.h>
 #include <xnix/cpu.h>
 #include <xnix/panic.h>
+#include <xnix/task.h>
 
 // The kernel's page directory
 page_directory_t *kernel_directory=0;
@@ -39,7 +40,7 @@ static void set_frame(u32 frame_addr)
     u32 idx = INDEX_FROM_BIT(frame);
     u32 off = OFFSET_FROM_BIT(frame);
     frames[idx] |= (0x1 << off);
-    KLOG(LOG_LEVEL_DEBUG, "Set frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
+    //KLOG(LOG_LEVEL_DEBUG, "Set frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
 }
 
 // Static function to clear a bit in the frames bitset
@@ -65,7 +66,7 @@ static u32 first_frame(void)
                 u32 toTest = 0x1 << j;
                 if ( !(frames[i]&toTest) )
                 {
-                    KLOG(LOG_LEVEL_DEBUG, "First free frame: %d\n", i*4*8+j);
+                    //KLOG(LOG_LEVEL_DEBUG, "First free frame: %d\n", i*4*8+j);
                     return i*4*8+j;
                 }
             }
@@ -91,7 +92,7 @@ void alloc_frame(page_t *page, int is_kernel, int is_writeable)
         page->rw = (is_writeable==1)?1:0;
         page->user = (is_kernel==1)?0:1;
         page->frame = idx;
-        KLOG(LOG_LEVEL_DEBUG, "Allocated frame: %u to page entry\n", idx);
+        //KLOG(LOG_LEVEL_DEBUG, "Allocated frame: %u to page entry\n", idx);
     }
 }
 
@@ -352,4 +353,21 @@ void virtual_map_pages(long addr, long size, int rw, int user)
          i += 0x1000;
     }
     return;
+}
+
+void* alloc_task_stack_page(void) {
+    static u32 next_stack_address = ADDR_PAGE_TASK;
+
+    page_t *page = get_page(next_stack_address, 1, current_directory);
+    if (!page) {
+        KLOG(LOG_LEVEL_ERROR, "get_page failed for task stack at 0x%X", next_stack_address);
+        return 0;
+    }
+
+    alloc_frame(page, 1, 1); // is_kernel = 1, is_writeable = 1
+
+    void* result = (void*)next_stack_address;
+    next_stack_address += 0x1000; // Go to the next page
+    KLOG(LOG_LEVEL_INFO, "[Paging] Allocated task stack page at %p\n", result);
+    return result;
 }

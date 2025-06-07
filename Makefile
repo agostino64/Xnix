@@ -53,6 +53,8 @@ SOURCES = core/boot.o \
 	  core/ordered_array.o \
 	  core/rtc.o \
 	  core/panic.o \
+	  core/task.o \
+	  core/switch_task.o \
 	  drivers/timer.o \
 	  drivers/keyb.o \
 	  drivers/serial.o

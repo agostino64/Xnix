@@ -21,9 +21,16 @@
 #include <xnix/fs.h>
 #include <xnix/initrd.h>
 #include <xnix/panic.h>
+#include <xnix/task.h>
 
 extern u32 placement_address;
 u32 initial_esp;
+
+void doIt(void) {
+    KLOG(LOG_LEVEL_INFO, "[task] Switching to otherTask... \n");
+    yield();
+    KLOG(LOG_LEVEL_INFO, "[task] Returned to mainTask!\n");
+}
 
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
@@ -111,6 +118,12 @@ void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
     if (drv_load(DRV_KEYBOARD) != 0) {
         KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_KEYBOARD\n");
     }
+
+    printk("Launching tasking...\n");
+    initTasking();
+    
+    // Test multitasking
+    doIt();
 
     // -------------------------------
     // Step 9: Launch shell
