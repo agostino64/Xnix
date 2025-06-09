@@ -1,9 +1,8 @@
 /*
- *  Xnix
- *
- *  Copyright (C) 2022, 2025  Agustin Gutierrez
- *
  *  Xnix Shell Interface
+ *
+ *  Copyright (C) 2023, 2025  Agustin Gutierrez
+ *
  *  Provides a simple interactive command-line interface
  *  with support for internal commands and dynamic input buffer resizing.
  */
@@ -19,8 +18,7 @@
 #include <xnix/log.h>
 #include <xnix/initrd.h>
 
-// Shell build and version info
-#define XNIX_VERSION "0.1.2-1"
+#define XNIX_VERSION "1.1.2-2"
 #define BUILD_DATE __DATE__
 #define BUILD_TIME __TIME__
 
@@ -41,53 +39,47 @@
     #define BUILD_COMPILER_PATCH 0
 #endif
 
-// Default input buffer size
 #define INITIAL_SIZE 10
 
-// Shell command buffer and size tracking
-static char* cmd = NULL;
+// Shell buffer and state
+static char *cmd = NULL;
+static char *dir = NULL;
 static u32 current_size = INITIAL_SIZE;
 
-// External low-level function for CPU feature detection
+// External CPU check
 extern int _cpuid_support(void);
 
-/**
- * Prints the help message showing all available shell commands.
- */
-void help_func(void)
+// ================== Command Functions ==================
+
+void help_func(char *args)
 {
     printk("Xnix %s - i386\n\n", XNIX_VERSION);
-    printk("Option      meaning\n");
-    printk(" version     get version\n");
-    printk(" clear       clear screen\n");
-    printk(" reboot      reboot system\n");
-    printk(" shutdown    poweroff system\n");
-    printk(" cpuinfo     print cpu info\n");
-    printk(" xnix        print xnix logo\n");
-    printk(" mem         shows the memory allocated for the shell\n");
-    printk(" ls          list files/directorys in ramfs\n");
-    printk("\nCopyright (C) 2022, 2025 Agustin Gutierrez\n");
+    printk("Commands:\n");
+    printk("  version     Show version\n");
+    printk("  clear       Clear screen\n");
+    printk("  reboot      Reboot system\n");
+    printk("  shutdown    Power off system\n");
+    printk("  cpuinfo     Display CPU info\n");
+    printk("  xnix        Show ASCII logo\n");
+    printk("  mem         Show memory info\n");
+    printk("  ls          List files in RAMFS\n");
+    printk("  cat         Read files from RAMFS\n");
+    printk("\nCopyright (C) 2023, 2025 Agustin Gutierrez (agostino64)\n");
 }
 
-/**
- * Prints the version and build metadata for the current kernel.
- */
-void version_func(void)
+void version_func(char *args)
 {
     printk("Xnix Version %s (%s %d.%d.%d) %s %s\n",
-           XNIX_VERSION,
-           BUILD_COMPILER,
-           BUILD_COMPILER_MAJOR,
-           BUILD_COMPILER_MINOR,
-           BUILD_COMPILER_PATCH,
-           BUILD_DATE,
-           BUILD_TIME);
+        XNIX_VERSION,
+        BUILD_COMPILER,
+        BUILD_COMPILER_MAJOR,
+        BUILD_COMPILER_MINOR,
+        BUILD_COMPILER_PATCH,
+        BUILD_DATE,
+        BUILD_TIME);
 }
 
-/**
- * Displays CPU information using CPUID instruction, if supported.
- */
-void cpuinfo_func(void)
+void cpuinfo_func(char *args)
 {
     if (_cpuid_support())
         detect_cpu();
@@ -95,83 +87,100 @@ void cpuinfo_func(void)
         printk("cpuid extension is not supported by the CPU.\n");
 }
 
-/**
- * Executes a command if found in the command list.
- * If not found, prints an error message.
- *
- * @param cmds Array of Cmd structs.
- * @param num_cmds Number of entries in cmds.
- */
-void exec_cmd(Cmd *cmds, int num_cmds)
+void acsii_func(char *args)
 {
-    for (int i = 0; i < num_cmds; i++)
-    {
-        if (strcmp(cmd, (char*)cmds[i].cmd) == 0)
-        {
-            cmds[i].func();
-            return;
-        }
-    }
-
-    printk("%s: Command not found.\n", cmd);
-}
-
-/**
- * Prints the ASCII Xnix logo.
- */
-void acsii_func(void)
-{
-    char *ascii_xnix = {
+    const char *ascii_xnix =
         " __  __      _       ___  ____        \n"
         " \\ \\/ /_ __ (_)_  __/ _ \\/ ___|    \n"
         "  \\  /|  _ \\| \\ \\/ / | | \\___ \\ \n"
         "  /  \\| | | | |>  <| |_| |___) |     \n"
-        " /_/\\_\\_| |_|_/_/\\_\\\\___/|____/  \n"
-    };
+        " /_/\\_\\_| |_|_/_/\\_\\\\___/|____/  \n";
 
     printk("%s\n", ascii_xnix);
 }
 
-/**
- * Prints an error message for kernel log testing.
- */
-void error_func(void)
+void meminfo_func(char *args)
 {
-    KLOG(LOG_LEVEL_ERROR, "error test!\n");
-}
-
-/**
- * Prints the currently allocated buffer size for the shell.
- */
-void meminfo_func(void)
-{
-    printk("Kernel memory usage %u bytes\n", get_memory_usage());
+    printk("Kernel memory usage: %u bytes\n", get_memory_usage());
     printk("Shell buffer size: %u bytes\n", current_size);
 }
 
-void list_fs(void)
+void list_fs(char *args)
 {
     list_initrd();
 }
 
+void cat_fs(char *args)
+{
+    if (args == NULL || *args == '\0')
+    {
+        printk("Usage: cat <filename>\n");
+        return;
+    }
+
+    if (read_initrd(args) != 0)
+    {
+        printk("file %s not exist\n", args);
+        return;
+    }
+}
+
+// ================== Command Execution ==================
+
 /**
- * Initializes the shell command set and dispatches the current input.
+ * Executes a shell command by name with optional arguments.
+ */
+void exec_cmd(const char *input, Command *cmds, int num_cmds)
+{
+    // Split input into command and arguments
+    char *space = strchr(input, ' ');
+    char *cmd_name = NULL;
+    char *cmd_args = NULL;
+
+    if (space)
+    {
+        *space = '\0';
+        cmd_name = (char*)input;
+        cmd_args = space + 1;
+    }
+    else
+    {
+        cmd_name = (char*)input;
+        cmd_args = NULL;
+    }
+
+    for (int i = 0; i < num_cmds; i++)
+    {
+        if (strcmp(cmd_name, (char *)cmds[i].cmd) == 0)
+        {
+            cmds[i].func(cmd_args);
+            return;
+        }
+    }
+
+    printk("%s: Command not found.\n", cmd_name);
+}
+
+/**
+ * Initializes shell commands and processes the current input.
  */
 void cmd_init(void)
 {
-    Cmd cmds[] = {
+    Command cmds[] = {
         { "help", help_func },
-        { "clear", clear_screen },
+        { "clear", (cmd_func_t)clear_screen },
         { "version", version_func },
-        { "reboot", reboot },
-        { "shutdown", shutdown },
+        { "reboot", (cmd_func_t)reboot },
+        { "shutdown", (cmd_func_t)shutdown },
         { "cpuinfo", cpuinfo_func },
         { "xnix", acsii_func },
         { "mem", meminfo_func },
-        { "ls", list_fs }
+        { "ls", list_fs },
+        { "cat", cat_fs }
     };
 
-    exec_cmd(cmds, sizeof(cmds) / sizeof(cmds[0]));
+    if (cmd != NULL)
+        exec_cmd(cmd, cmds, sizeof(cmds) / sizeof(cmds[0]));
 }
 
 /**
@@ -181,12 +190,53 @@ void cmd_init(void)
  */
 void init_shell(void)
 {
+    int i = 0;
+    struct dirent *node = 0;
+    static u32 size = INITIAL_SIZE;
+    
     if (cmd == NULL)
         cmd = (char*)kmalloc(current_size);
         
+    if (dir == NULL)
+        dir = (char*)kmalloc(size); // is initial size
+   
+    node = readdir_fs( fs_root, i );
+
+    while (node != 0)
+    {
+        fs_node_t *fsnode = finddir_fs(fs_root, node->name );
+
+        // Node is a directory
+        if ((fsnode->flags & 0x7) == FS_DIRECTORY)
+        {
+            u32 len = strlen(node->name) + 1;
+            
+            // Resize buffer if needed
+            if (len > size)
+            {
+                char* new_dir = (char*)krealloc(dir, size, len);
+                if (new_dir)
+                {
+                    dir = new_dir;
+                    size = len;
+                }
+                else
+                {
+                    KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
+                    continue;
+                }
+            }
+            KLOG(LOG_LEVEL_INFO, "[Shell] Founded directory: %s\n", node->name);
+            strcpy(dir, node->name);
+        }
+
+        i += 1;
+        node = readdir_fs(fs_root, i);
+
+    }
     while (1)
     {     
-        write(">> ");  // Prompt
+        printk("%s@kernel:> ", dir);  // userspace still not implemented yet );
         gets();         // Wait for input (populates buffer2)
         char* input = get_input_buffer();
         u32 input_len = strlen(input) + 1;  // +1 for null terminator
@@ -215,5 +265,4 @@ void init_shell(void)
         cmd_init();  // Try to run the command
     }
 }
-
 
