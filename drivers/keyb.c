@@ -1,11 +1,15 @@
 /*
  *  Xnix
  *
- *  Copyright (C) 2022, 2025  Agustin Gutierrez
+ *  Copyright (C) 2023, 2025  Agustin Gutierrez
  *
- *  Basic keyboard driver for handling PS/2 input.
- *  Supports scancode decoding, buffering input characters, 
- *  and processing Caps Lock / Shift modifiers.
+ *  Enhanced keyboard driver for PS/2 input.
+ *  Features:
+ *    - Fixed scancode decoding with US QWERTY keymap
+ *    - Linear input buffer with explicit capture on Enter
+ *    - Proper Caps Lock/Shift handling
+ *    - Efficient LED state management
+ *    - Echo of characters to VGA console
  */
 
 #include <xnix/common.h>
@@ -14,210 +18,203 @@
 #include <xnix/drv_register.h>
 #include <xnix/drv_control.h>
 #include <xnix/log.h>
-
-extern u32 cursor_y, cursor_x;
+#include <xnix/task.h>
+#include <xnix/cpu.h>    // for inb(), outb()
 
 // Modifier flags
-volatile int shift_flag = 0;
-volatile int caps_flag = 0;
+static volatile int shift_flag = 0;
+static volatile int caps_flag  = 0;
+static volatile int ctrl_flag  = 0;  // reserved for future use
 
-// Buffers for capturing user input
-volatile char* buffer;   // Current input buffer
-volatile char* buffer2;  // Copy for gets()
-volatile int kb_count = 0; // Index for input buffer
-volatile int gets_flag = 0; // Flag indicating newline (Enter) received
+// LED state byte
+static unsigned char kbd_led_state = 0;
 
-// LED control bits for keyboard
-unsigned short ltmp;
-int ktmp = 0;
+// Input buffers and state
+#define KB_BUFFER_SIZE 256
+static volatile char buffer[KB_BUFFER_SIZE];   // raw input buffer
+static volatile char buffer2[KB_BUFFER_SIZE];  // captured line buffer
+static volatile int  kb_count    = 0;  // number of chars in 'buffer'
+static volatile int  gets_flag   = 0;  // set when Enter is pressed
 
-// Internal function to transfer input buffer to gets buffer
-static void do_gets(void);
-
-/**
- * US QWERTY keymap for scancode set 1.
- * Values of 1 are reserved or unprintable.
- */
-unsigned char kbdus[128] = {
-    0,  27, '1', '2', '3', '4', '5', '6', '7', '8',
-    '9', '0', '-', '=', '\b',       // Backspace
-    '\t',                           // Tab
-    'q', 'w', 'e', 'r',
-    't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', // Enter
-    1,                              // Control
-    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
-    '\'', '`', 0,                   // Left Shift
-    '\\', 'z', 'x', 'c', 'v', 'b', 'n',
-    'm', ',', '.', '/', 1,         // Right Shift
-    '*',
-    1,                              // Alt
-    ' ',                            // Spacebar
-    1,                              // Caps Lock
-    1, 1, 1, 1, 1, 1, 1, 1,         // F1–F8
-    1,                              // F9
-    1,                              // Num Lock
-    1,                              // Scroll Lock
-    1,                              // Home
-    1,                              // Up
-    1,                              // Page Up
-    '-', 1, 1,                      // Left, ??, Right
-    '+', 1,                         // End
-    1,                              // Down
-    1,                              // Page Down
-    1,                              // Insert
-    1,                              // Delete
-    1, 1, '\\',                     // ??, ??, Backslash
-    1, 1,                           // F11, F12
-    1                               // All others undefined
+// US QWERTY keymaps
+static const unsigned char kbdus_norm[128] = {
+    /* 0x00 - 0x0F */    0,  0x1B,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
+    /* 0x10 - 0x1F */  'q','w','e','r','t','y','u','i','o','p','[',']','\n', 0 ,'a','s',
+    /* 0x20 - 0x2F */  'd','f','g','h','j','k','l',';','\'', '`', 0 ,'\\','z','x','c','v',
+    /* 0x30 - 0x3F */  'b','n','m',',','.','/', 0 ,'*', 0 ,' ',' ', 0 , 0 , 0 , 0 , 0 ,
+    /* 0x40 - 0x4F */    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,'7','8','9','-',
+    /* 0x50 - 0x5F */  '4','5','6','+','1','2','3','0','.', 0 , 0 , 0 , 0 , 0 , 0 , 0
 };
 
-/**
- * Keyboard interrupt handler.
- * Processes scancodes, manages buffer input, and handles modifier states.
- */
-static void keyboard_handler(registers_t regs)
-{
+static const unsigned char kbdus_shift[128] = {
+    /* 0x00 - 0x0F */    0,  0x1B,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
+    /* 0x10 - 0x1F */  'Q','W','E','R','T','Y','U','I','O','P','{','}','\n', 0 ,'A','S',
+    /* 0x20 - 0x2F */  'D','F','G','H','J','K','L',':','"','~', 0 ,'|','Z','X','C','V',
+    /* 0x30 - 0x3F */  'B','N','M','<','>','?', 0 ,'*', 0 ,' ',' ', 0 , 0 , 0 , 0 , 0 ,
+    /* 0x40 - 0x4F */    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,'7','8','9','-',
+    /* 0x50 - 0x5F */  '4','5','6','+','1','2','3','0','.', 0 , 0 , 0 , 0 , 0 , 0 , 0
+};
+
+// Scancode definitions
+#define SC_LSHIFT    0x2A
+#define SC_RSHIFT    0x36
+#define SC_CAPSLOCK  0x3A
+#define SC_NUMLOCK   0x45
+#define SC_SCROLLOCK 0x46
+#define SC_ENTER     0x1C
+#define SC_BACKSPACE 0x0E
+#define SC_F12       0x58
+
+// Wait until PS/2 controller is ready, then send LED update commands
+static void update_leds(void) {
+    while (inb(0x64) & 0x02) { /* wait */ }
+    outb(0x60, 0xED);  // command: set LEDs
+    while (inb(0x64) & 0x02) { /* wait */ }
+    outb(0x60, kbd_led_state);
+}
+
+// Copy raw buffer -> public buffer2 and NUL-terminate
+static void do_gets(void) {
+    int len = (kb_count < KB_BUFFER_SIZE-1) ? kb_count : (KB_BUFFER_SIZE-1);
+    for (int i = 0; i < len; i++) {
+        buffer2[i] = buffer[i];
+    }
+    buffer2[len] = '\0';
+}
+
+// PS/2 keyboard interrupt handler
+static void keyboard_handler(registers_t regs) {
     unsigned char scancode = inb(0x60);
-    //KLOG(LOG_LEVEL_DEBUG, "Keyboard IRQ1 received, scancode=0x%02x\n", scancode);
 
-    switch (scancode)
-    {
-        case 0x3A: // Caps Lock
-            outb(0x60, 0xED); // Prepare LED change
-            ltmp |= 4;        // Caps bit
-            outb(0x60, ltmp);
-            caps_flag = !caps_flag;
-            KLOG(LOG_LEVEL_DEBUG, "Caps Lock toggled: %d\n", caps_flag);
-            break;
-
-        case 0x45: // Num Lock
-            outb(0x60, 0xED);
-            ltmp |= 2;
-            outb(0x60, ltmp);
-            KLOG(LOG_LEVEL_DEBUG, "Num Lock toggled\n");
-            break;
-
-        case 0x46: // Scroll Lock
-            outb(0x60, 0xED);
-            ltmp |= 1;
-            outb(0x60, ltmp);
-            KLOG(LOG_LEVEL_DEBUG, "Scroll Lock toggled\n");
-            break;
-
-        case 60: // F12 (placeholder for reboot or other feature)
-            KLOG(LOG_LEVEL_INFO, "F12 pressed (custom action placeholder)\n");
-            // reboot();
-            break;
-
-        default:
-            break;
+    // Ignore key releases
+    if (scancode & 0x80) {
+        unsigned char release = scancode & 0x7F;
+        if (release == SC_LSHIFT || release == SC_RSHIFT) {
+            shift_flag = 0;
+        }
+        return;
     }
 
-    if (scancode & 0x80) {
-        // Key release
-        unsigned char released = scancode - 0x80;
-        if (released == 42 || released == 54)
-        {
-            shift_flag = 0;
-            KLOG(LOG_LEVEL_DEBUG, "Shift key released\n");
-        }
-    } else {
-        // Key press
-        if (scancode == 42 || scancode == 54) {
-            shift_flag = 1;
-            KLOG(LOG_LEVEL_DEBUG, "Shift key pressed\n");
-            return;
-        }
-
-        char key = kbdus[scancode];
-
-        if (key == '\n') {
-            if (gets_flag == 0) {
-                KLOG(LOG_LEVEL_DEBUG, "Enter key pressed, capturing input buffer\n");
-                do_gets();
-            }
-            gets_flag++;
-            while (kb_count) buffer[kb_count--] = 0;
-        }
-        else if (key == '\b') {
-            if (kb_count) {
-                buffer[kb_count--] = 0;
-                KLOG(LOG_LEVEL_DEBUG, "Backspace: removed one character, new count = %d\n", kb_count);
-            }
-        } else {
-            buffer[kb_count++] = key;
-            KLOG(LOG_LEVEL_DEBUG, "Key pressed: '%c' (scancode=0x%02x), count=%d\n", key, scancode, kb_count);
-        }
-
-        put(key); // Echo character to screen
+    if (scancode == SC_LSHIFT || scancode == SC_RSHIFT) {
+        shift_flag = 1;
         return;
+    }
+    if (scancode == SC_CAPSLOCK) {
+        caps_flag = !caps_flag;
+        kbd_led_state = (kbd_led_state & ~0x04) | (caps_flag ? 0x04 : 0);
+        update_leds();
+        KLOG(LOG_LEVEL_DEBUG, "Caps Lock %s\n", caps_flag ? "ON" : "OFF");
+        return;
+    }
+    if (scancode == SC_NUMLOCK) {
+        kbd_led_state ^= 0x02;
+        update_leds();
+        KLOG(LOG_LEVEL_DEBUG, "Num Lock toggled\n");
+        return;
+    }
+    if (scancode == SC_SCROLLOCK) {
+        kbd_led_state ^= 0x01;
+        update_leds();
+        KLOG(LOG_LEVEL_DEBUG, "Scroll Lock toggled\n");
+        return;
+    }
+    if (scancode == SC_F12) {
+        KLOG(LOG_LEVEL_INFO, "F12 pressed\n");
+        return;
+    }
+
+    // Decode character
+    char key = shift_flag ? kbdus_shift[scancode] : kbdus_norm[scancode];
+    if (!key) {
+        return;
+    }
+
+    // Apply Caps Lock to letters
+    if (caps_flag) {
+        if (key >= 'a' && key <= 'z')
+            key = key - ('a' - 'A');
+        else if (key >= 'A' && key <= 'Z')
+            key = key + ('a' - 'A');
+    }
+
+    // Custom input logic: Enter, Backspace, or normal char
+    if (key == '\n') {
+        // On first Enter, capture buffer (no full-line echo)
+        if (gets_flag == 0) {
+            KLOG(LOG_LEVEL_DEBUG, "Enter key pressed, capturing input buffer\n");
+            do_gets();
+        }
+        gets_flag++;
+        // Clear raw buffer for next line
+        while (kb_count > 0)
+            buffer[--kb_count] = 0;
+        // Echo single newline so shell output appears cleanly
+        put('\n');
+    }
+    else if (key == '\b') {
+        if (kb_count > 0) {
+            buffer[--kb_count] = 0;
+            // move cursor back, overwrite with space, move back again
+            put('\b');
+            put(' ');
+            put('\b');
+            KLOG(LOG_LEVEL_DEBUG, "Backspace: removed one character, new count = %d\n", kb_count);
+        }
+    }
+    else {
+        if (kb_count < KB_BUFFER_SIZE - 1) {
+            buffer[kb_count++] = key;
+            put(key);  // echo the character
+            KLOG(LOG_LEVEL_DEBUG, "Key pressed: '%c' (scancode=0x%02x), count=%d\n",
+                 key, scancode, kb_count);
+        }
     }
 }
 
-/**
- * Registers the keyboard interrupt handler (IRQ1).
- * Call this once during system initialization.
- */
-static int init_keyboard(void)
-{
+// Initialize keyboard driver
+static int init_keyboard(void) {
     register_interrupt_handler(IRQ1, &keyboard_handler);
-    KLOG(LOG_LEVEL_INFO, "Keyboard driver initialized and IRQ1 handler registered.\n");
+    KLOG(LOG_LEVEL_INFO, "Keyboard driver initialized\n");
     return 0;
 }
 
-/**
- * Reads a single character from keyboard buffer.
- * Waits until a key is available.
- *
- * @return ASCII character code of key pressed.
- */
-unsigned char getch(void)
-{
-    unsigned char getch_char;
+// Low-level character read
+unsigned char getch(void) {
+    unsigned char sc, c;
 
-    if (kbdus[inb(0x60)] != 0)
-        outb(0x60, 0xF4); // Clear buffer
+    // Flush any pending data
+    if (kbdus_norm[inb(0x60)] != 0)
+        outb(0x60, 0xF4);
 
-    while (kbdus[inb(0x60)] == 0); // Wait for input
-    getch_char = kbdus[inb(0x60)];
-    outb(0x60, 0xF4); // Acknowledge
+    // Wait for key down event
+    do {
+        sc = inb(0x60);
+    } while ((sc & 0x80) || kbdus_norm[sc] == 0);
 
-    return getch_char;
+    // Decode with modifiers
+    c = shift_flag ? kbdus_shift[sc] : kbdus_norm[sc];
+    outb(0x60, 0xF4);  // acknowledge
+    return c;
 }
 
 /**
  * Reads a line of input from the keyboard until Enter is pressed.
- * Returns pointer to the static input buffer.
- *
- * @return Null-terminated input string.
+ * Returns pointer to the static buffer2 (NUL-terminated).
  */
-char* gets(void)
-{
+char* gets(void) {
     gets_flag = 0;
-    while (gets_flag == 0);
+    // Busy-wait until handler sets gets_flag
+    while (gets_flag == 0) { /* wait */ }
     return (char*)buffer2;
 }
 
 /**
- * Transfers the current buffer content to buffer2.
- * Called internally when Enter is pressed.
+ * Returns the last captured line (NUL-terminated) after Enter.
  */
-static void do_gets(void)
-{
-    buffer[kb_count++] = 0; // Null-terminate
-
-    for (; kb_count; kb_count--)
-        buffer2[kb_count] = buffer[kb_count];
-}
-
-/**
- * Returns pointer to latest keyboard input buffer (copied on Enter).
- *
- * @return Pointer to static buffer2.
- */
-char* get_input_buffer(void)
-{
+char* get_input_buffer(void) {
     return (char*)buffer2;
 }
 
+// Register this driver with the kernel
 REGISTER_DRIVER(init_keyboard, DRV_KEYBOARD);
+
