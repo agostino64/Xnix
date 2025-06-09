@@ -34,21 +34,15 @@ static Task *runningTask;
 static Task mainTask;
 
 /// Secondary test task (cooperative)
-static Task otherTask;
+
+static Task shellTask;
 
 /// External: allocates a page for the stack of a new task (defined elsewhere)
 extern void* alloc_task_stack_page(void);
 
-static u32 next_taskId = 1;
+extern void shell_task(void);
 
-/**
- * Main function of the secondary task.
- * Prints test messages and continuously yields the CPU.
- */
-static void otherMain(void) {
-    KLOG(LOG_LEVEL_INFO, "[task] Hello multitasking world!\n");
-    yield();
-}
+static u32 next_taskId = 1;
 
 /**
  * @brief Initializes the cooperative multitasking subsystem.
@@ -67,11 +61,11 @@ void initTasking(void) {
     KLOG(LOG_LEVEL_DEBUG, "[Tasking] mainTask CR3: 0x%X, EFLAGS: 0x%X\n", mainTask.regs.cr3, mainTask.regs.eflags);
 
     // Create secondary task
-    createTask(&otherTask, otherMain, mainTask.regs.eflags, (u32*)mainTask.regs.cr3);
+    createTask(&shellTask, shell_task, mainTask.regs.eflags, (u32*)mainTask.regs.cr3);
 
     // Link the tasks in a circular list
-    mainTask.next = &otherTask;
-    otherTask.next = &mainTask;
+    mainTask.next = &shellTask;
+    shellTask.next = &mainTask;
 
     runningTask = &mainTask;
     
@@ -110,6 +104,7 @@ void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
 
     // Allocate a new stack page and point ESP to its end
     task->regs.esp = (u32) alloc_task_stack_page() + 0x1000;
+    task->regs.ebp = task->regs.esp;    // <— initialize EBP to the top of stack
 
     task->next = 0;
 
@@ -130,6 +125,7 @@ void yield(void) {
     runningTask = runningTask->next;
 
     KLOG(LOG_LEVEL_DEBUG, "[Tasking] Switching to task at EIP=0x%X TASK ID=%u\n", runningTask->regs.eip, runningTask->taskId);
+    KLOG(LOG_LEVEL_DEBUG, "Task %d context: EIP=0x%x ESP=0x%x EBP=0x%x\n", runningTask->taskId, runningTask->regs.eip, runningTask->regs.esp, runningTask->regs.ebp);
     
     // Perform the context switch
     switchTask(&last->regs, &runningTask->regs);

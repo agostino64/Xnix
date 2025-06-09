@@ -17,6 +17,7 @@
 #include <xnix/heap.h>
 #include <xnix/log.h>
 #include <xnix/initrd.h>
+#include <xnix/task.h>
 
 #define XNIX_VERSION "1.1.2-2"
 #define BUILD_DATE __DATE__
@@ -184,85 +185,78 @@ void cmd_init(void)
 }
 
 /**
- * Initializes the shell and starts the input loop.
- * Waits for user input, dynamically resizes the buffer if needed,
- * and invokes command handlers.
+ * Shell main task function.
+ * Runs as a cooperative task and yields after each command.
  */
-void init_shell(void)
-{
-    int i = 0;
-    struct dirent *node = 0;
-    static u32 size = INITIAL_SIZE;
-    
-    if (cmd == NULL)
+void shell_task(void) {
+    u32 dir_buf_size = INITIAL_SIZE;
+    u32 idx;
+    struct dirent *node;
+
+    KLOG(LOG_LEVEL_INFO, "[Shell] starting shell_task\n");
+
+    // Allocate buffers
+    if (!cmd)
         cmd = (char*)kmalloc(current_size);
-        
-    if (dir == NULL)
-        dir = (char*)kmalloc(size); // is initial size
-   
-    node = readdir_fs( fs_root, i );
+    if (!dir)
+        dir = (char*)kmalloc(dir_buf_size);
 
-    while (node != 0)
-    {
-        fs_node_t *fsnode = finddir_fs(fs_root, node->name );
-
-        // Node is a directory
-        if ((fsnode->flags & 0x7) == FS_DIRECTORY)
-        {
+    // Find first directory in fs_root
+    idx = 0;
+    node = readdir_fs(fs_root, idx);
+    while (node) {
+        fs_node_t *fsnode = finddir_fs(fs_root, node->name);
+        if ((fsnode->flags & 0x7) == FS_DIRECTORY) {
             u32 len = strlen(node->name) + 1;
-            
-            // Resize buffer if needed
-            if (len > size)
-            {
-                char* new_dir = (char*)krealloc(dir, size, len);
-                if (new_dir)
-                {
+            if (len > dir_buf_size) {
+                char *new_dir = (char*)krealloc(dir, dir_buf_size, len);
+                if (new_dir) {
                     dir = new_dir;
-                    size = len;
-                }
-                else
-                {
-                    KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
-                    continue;
+                    dir_buf_size = len;
+                } else {
+                    KLOG(LOG_LEVEL_ERROR, "[Shell] Could not expand dir buffer\n");
                 }
             }
-            KLOG(LOG_LEVEL_INFO, "[Shell] Founded directory: %s\n", node->name);
             strcpy(dir, node->name);
+            break;
         }
-
-        i += 1;
-        node = readdir_fs(fs_root, i);
-
+        idx++;
+        node = readdir_fs(fs_root, idx);
     }
-    while (1)
-    {     
-        printk("%s@kernel:> ", dir);  // userspace still not implemented yet );
-        gets();         // Wait for input (populates buffer2)
-        char* input = get_input_buffer();
-        u32 input_len = strlen(input) + 1;  // +1 for null terminator
 
-        // Resize buffer if needed
-        if (input_len > current_size)
-        {
-            char* new_cmd = (char*)krealloc(cmd, current_size, input_len);
-            if (new_cmd)
-            {
+    // Main shell loop
+    while (1) {
+        printk("%s@kernel:> ", dir);
+
+        // Read line (blocks internally)
+        gets();
+        char *input = get_input_buffer();
+        u32 input_len = strlen(input) + 1;
+
+        // Resize cmd buffer if needed
+        if (input_len > current_size) {
+            char *new_cmd = (char*)krealloc(cmd, current_size, input_len);
+            if (new_cmd) {
                 cmd = new_cmd;
                 current_size = input_len;
-            }
-            else
-            {
-                KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
+            } else {
+                KLOG(LOG_LEVEL_ERROR, "[Shell] Could not expand cmd buffer\n");
+                yield();
                 continue;
             }
         }
 
+        // Copy and execute
         strcpy(cmd, input);
+        if (cmd[0] != '\0') {
+            cmd_init();
+        }
 
-        if (cmd[0] == '\0')  // Empty command, ignore
-            continue;
-            
-        cmd_init();  // Try to run the command
+        // Yield to allow other tasks
+        yield();
     }
 }
+
+
+
 

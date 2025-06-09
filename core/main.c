@@ -26,12 +26,6 @@
 extern u32 placement_address;
 u32 initial_esp;
 
-void doIt(void) {
-    KLOG(LOG_LEVEL_INFO, "[task] Switching to otherTask... \n");
-    yield();
-    KLOG(LOG_LEVEL_INFO, "[task] Returned to mainTask!\n");
-}
-
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
  *
@@ -120,17 +114,15 @@ void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
     }
 
     printk("Launching tasking...\n");
-    initTasking();
+    initTasking(); // Task init on mainTask and switch to shellTask
+
+    printk("Shell is launched...\n");
     
-    // Test multitasking
-    doIt();
-
-    // -------------------------------
-    // Step 9: Launch shell
-    // -------------------------------
-    printk("Launching shell...\n");
-    init_shell();
-
+    yield(); // Switch to mainTask
+    
+    KLOG(LOG_LEVEL_INFO, "Not in shell task!\n");
+    yield(); // Switch to shellTask
+    
     // Should never return; fallback in case shell exits
     while (1) {
         __asm__ __volatile__("cli; hlt");
