@@ -18,6 +18,8 @@ int nroot_nodes;                    // Number of file nodes.
 
 struct dirent dirent;
 
+static char *buffer = NULL;
+
 static u32 initrd_read(fs_node_t *node, u32 offset, u32 size, u8 *buffer)
 {
     initrd_file_header_t header = file_headers[node->inode];
@@ -140,32 +142,90 @@ fs_node_t *initialise_initrd(u32 location)
         root_nodes[i].impl = 0;
         KLOG(LOG_LEVEL_DEBUG, "Initrd file #%d: name='%s', offset=0x%x, size=%u\n", i, root_nodes[i].name, file_headers[i].offset, file_headers[i].length);
     }
-    KERN_INFO("Initrd initialized successfully.\n");
+    KLOG(LOG_LEVEL_INFO, "Initrd initialized successfully.\n");
     return initrd_root;
 }
 
 int list_initrd(void)  // section 8
 {
     // list the contents of /
-	int i = 0;
-	struct dirent *node = 0;
+    int i = 0;
+    struct dirent *node = 0;
 
-	node = readdir_fs( fs_root, i );
+    node = readdir_fs(fs_root, i);
 
-	while ( node != 0 )
-	{
-		fs_node_t *fsnode = finddir_fs( fs_root, node -> name );
+    while (node != 0)
+    {
+        fs_node_t *fsnode = finddir_fs(fs_root, node->name);
 
-		// Node is a directory
-		if ( ( fsnode -> flags & 0x7 ) == FS_DIRECTORY )
-		    printk("Directory: %s\n", node->name);
-		else
-		    printk("File: %s\n", node->name);
+        //if node not exist, then skipt
+        if (!fsnode)
+            continue;
+        
+        // Node is a directory
+        if ((fsnode->flags & 0x7) == FS_FILE)
+            printk("File - %s\n", node->name);
+        else
+            printk("Dir  - %s\n", node->name);
 
-		i += 1;
-		node = readdir_fs( fs_root, i );
+        i += 1;
+        node = readdir_fs(fs_root, i);
 
-	}
+    }
 
-	return 0;
+    return 0;
+}
+
+// Use heap for reduce memory usage
+int read_initrd(char *file)
+{
+    int i = 0;
+    struct dirent *node = 0;
+    static u32 mem_size = 264;
+
+    if (buffer == NULL)
+        buffer = (char*)kmalloc(mem_size);
+
+    KLOG(LOG_LEVEL_DEBUG, "heap started with %u of size.\n", mem_size);    
+
+    while ((node = readdir_fs(fs_root, i)) != 0)
+    {
+        fs_node_t *fsnode = finddir_fs(fs_root, node->name);
+        i++;
+
+        //if node not exist, then skipt
+        if (!fsnode)
+            continue;
+
+        // Skip directories
+        if ((fsnode->flags & 0x7) == FS_DIRECTORY)
+            continue;
+
+        // Match file name
+        if (strcmp(node->name, file) == 0)
+        {
+            KLOG(LOG_LEVEL_DEBUG, "node->name and %s match.\n", file);
+
+            u32 size = read_fs(fsnode, 0, mem_size, (u8*)buffer);
+            for (u32 j = 0; j < size; j++)
+                put(buffer[j]);
+
+            // Optionally null-terminate or expand
+            u32 len = size + 1;
+            char *new_buffer = (char*)krealloc(buffer, mem_size, len);
+            if (new_buffer)
+            {
+                buffer = new_buffer;
+                mem_size = len;
+            }
+            else
+            {
+                KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
+            }
+
+            return 0; // Success
+        }
+    }
+
+    return 1; // File not found
 }

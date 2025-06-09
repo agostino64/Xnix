@@ -24,5 +24,6 @@ typedef struct
 // and returns a completed filesystem node.
 fs_node_t *initialise_initrd(u32 location);
 int list_initrd(void);
+int read_initrd(char *file);
 
 #endif
