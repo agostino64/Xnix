@@ -40,6 +40,7 @@ void memcpy(u8 *dest, const u8 *src, u32 len);
 int strcmp(char *str1, char *str2);
 char* strcpy(char* dest, const char* src);
 unsigned int strlen(const char *str);
+char *strchr(const char *s, int c);
 
 #endif
 
