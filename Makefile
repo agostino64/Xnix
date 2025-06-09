@@ -33,6 +33,10 @@ ifeq ($(DEBUG),1)
     ASFLAGS += -F dwarf -g
 endif
 
+ifeq ($(DEBUG),0)
+    CFLAGS  += -O2
+endif
+
 SOURCES = core/boot.o \
 	  core/interrupt.o \
 	  core/cpu_asm.o \
