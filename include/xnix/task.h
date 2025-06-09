@@ -15,6 +15,7 @@ typedef struct cpu_state {
 typedef struct Task {
     CPUState regs;
     struct Task *next;
+    u32 taskId;
 } Task;
 
 void initTasking(void);

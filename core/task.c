@@ -39,6 +39,8 @@ static Task otherTask;
 /// External: allocates a page for the stack of a new task (defined elsewhere)
 extern void* alloc_task_stack_page(void);
 
+static u32 next_taskId = 1;
+
 /**
  * Main function of the secondary task.
  * Prints test messages and continuously yields the CPU.
@@ -73,7 +75,8 @@ void initTasking(void) {
 
     runningTask = &mainTask;
     
-    KLOG(LOG_LEVEL_INFO, "[Tasking] Multitasking initialized. Running mainTask.\n");
+    KLOG(LOG_LEVEL_INFO, "[Tasking] Multitasking initialized. Running mainTask\n");
+    KLOG(LOG_LEVEL_DEBUG, "Running task id=%u\n", runningTask->taskId);
 }
 
 /**
@@ -87,11 +90,13 @@ void initTasking(void) {
 void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
     if ((!task) & (!main) & (!pagedir)) {
         KLOG(LOG_LEVEL_ERROR, "[Tasking] createTask received null pointer!\n");
+        KLOG(LOG_LEVEL_DEBUG, "Running task id=%d\n", task->taskId);
         return;
     }
 
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Creating new task at %p for entry point %p\n", task, main);
+    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Creating new task at %pfor entry point %p\n", task, main);
 
+    task->taskId = next_taskId++;
     // Initialize registers with safe default values
     task->regs.eax = 0;
     task->regs.ebx = 0;
@@ -108,7 +113,7 @@ void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
 
     task->next = 0;
 
-    KLOG(LOG_LEVEL_INFO, "[Tasking] Task created: entry=0x%X, stack=0x%X\n", task->regs.eip, task->regs.esp);
+    KLOG(LOG_LEVEL_INFO, "[Tasking] Task created: id=%u entry=0x%X, stack=0x%X\n", task->taskId, task->regs.eip, task->regs.esp);
 }
 
 /**
@@ -118,13 +123,13 @@ void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
  * It saves the state of the current task and restores the state of the next one.
  */
 void yield(void) {
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Yielding from task at EIP=0x%X\n", runningTask->regs.eip);
+    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Yielding from task at EIP=0x%X TASK ID=%u\n", runningTask->regs.eip, runningTask->taskId);
 
     // Save the current task and switch to the next
     Task *last = runningTask;
     runningTask = runningTask->next;
 
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Switching to task at EIP=0x%X\n", runningTask->regs.eip);
+    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Switching to task at EIP=0x%X TASK ID=%u\n", runningTask->regs.eip, runningTask->taskId);
     
     // Perform the context switch
     switchTask(&last->regs, &runningTask->regs);
