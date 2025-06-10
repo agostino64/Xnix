@@ -1,0 +1,5 @@
+README:
+
+(C) Agustin Gutierrez 2025
+
+Xnix is a hobby kernel. Code is not to be reproduced.
