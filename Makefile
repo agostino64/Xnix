@@ -24,7 +24,7 @@ FSPATH = fs_files/
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
 CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin  -I./include \
-	 -fno-stack-protector -m32 -march=i386
+	 -fno-stack-protector -m32
 LDFLAGS += -T linker.ld -m elf_i386
 ASFLAGS += -f elf
 
@@ -35,6 +35,10 @@ endif
 
 ifeq ($(DEBUG),0)
     CFLAGS  += -O2
+endif
+
+ifeq ($(CC),clang)
+    CFLAGS += -mno-sse -mno-mmx -msoft-float
 endif
 
 SOURCES = core/boot.o \
