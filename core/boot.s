@@ -35,17 +35,18 @@ mboot:
 [EXTERN clear_screen]
 [EXTERN start_kernel]           ; This is the entry point of our C code
 
-_start:
-    call clear_screen		; Initialise the screen (by clearing it)
+_start:    
+    cli                        ; disable interrupts early
     
-    ; Load multiboot information:
-    push esp
-    push ebx
-  
-    ; Execute the kernel:
-    cli                         ; Disable interrupts.
-    call start_kernel           ; call our main() function.
-    jmp $                       ; Enter an infinite loop, to stop the processor
-                                ; executing whatever rubbish is in the memory
-                                ; after our kernel!
-
+    ;─── align stack to 16 bytes ─────────────────────────────────────────────
+    mov    eax, esp
+    and    eax, 0xFFFFFFF0
+    mov    esp, eax
+    
+    ;─── pass multiboot parameters ───────────────────────────────────────────
+    ;  On entry: EBX = multiboot magic; EAX (undefined) 
+    ;  We want: first arg = mboot_ptr, second arg = initial_stack
+    push   ebx                 ; [esp] ← magic (we'll drop it)
+    push   esp                 ; [esp] ← initial_stack (after pushes!)
+    call   start_kernel        ; C: start_kernel(mboot_ptr, initial_stack)
+    jmp $                       ; hang if it ever returns

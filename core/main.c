@@ -38,8 +38,9 @@ u32 initial_esp;
  *  6. Shell
  *
  */
-void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
+void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
 {
+    clear_screen();     // ← now safe: stack is 16-byte aligned
     printk("Xnix Kernel Booting...\n\n");
     initial_esp = initial_stack;
 
