@@ -116,16 +116,16 @@ void start_kernel(struct multiboot *mboot_ptr, u32 initial_stack)
     printk("Launching tasking...\n");
     initTasking(); // Task init on mainTask and switch to shellTask
 
-    printk("Shell is launched...\n");
+    printk("Shell is launched...\n");    
+    yield(); // Switch to shellTask
     
-    yield(); // Switch to mainTask
-    
+    // now in mainTask
     KLOG(LOG_LEVEL_INFO, "Not in shell task!\n");
     yield(); // Switch to shellTask
     
     // Should never return; fallback in case shell exits
     while (1) {
-        __asm__ __volatile__("cli; hlt");
+        yield(); // switch between tasks
     }
 }
 
