@@ -63,16 +63,22 @@ SOURCES = core/boot.o \
 	  drivers/keyb.o \
 	  drivers/serial.o
 
-all: $(SOURCES) link initrd
+all: Image initrd
 
-link:
+Image: $(SOURCES)
 	@$(LD) $(LDFLAGS) -o $(OUT) $(SOURCES)
 	@echo ' '
 	@echo $(OUT)
 	
-	
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.s
+	$(AS) $(ASFLAGS) $< -o $@
+
 clean:
-	rm core/*.o drivers/*.o *.o *.img $(OUT) && rm -r mkiso
+	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img
+	rm -rf mkiso
 	
 iso: Image
 	mkdir -p mkiso/boot/grub
