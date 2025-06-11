@@ -54,7 +54,7 @@ extern int _cpuid_support(void);
 
 void help_func(char *args)
 {
-    printk("Xnix %s - i386\n\n", XNIX_VERSION);
+    printk("Xnix %s\n\n", XNIX_VERSION);
     printk("Commands:\n");
     printk("  version     Show version\n");
     printk("  clear       Clear screen\n");
