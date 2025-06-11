@@ -65,9 +65,11 @@ void put(const char c)
     switch (c)
     {
         case '\b': // Backspace
-            if (cursor_x != 0 && cursor_x != 3) cursor_x--;
-            put(' ');
-            if (cursor_x != 0 && cursor_x != 3) cursor_x--;
+            if (cursor_x != 0) {
+                cursor_x--;
+                location = video_memory + (cursor_y * 80 + cursor_x);
+                *location = ' ' | attribute;
+             }
             break;
 
         case '\t': // Tab
