@@ -147,13 +147,13 @@ void init_paging(unsigned int memorysz)
     while (i < placement_address+0x1000)
     {
         // Kernel code is readable but not writeable from userspace.
-        alloc_frame( get_page(i, 1, kernel_directory), 0, 0);
+        alloc_frame( get_page(i, 1, kernel_directory), 1, 0);
         i += 0x1000;
     }
 
     // Now allocate those pages we mapped earlier.
     for (i = KHEAP_START; i < KHEAP_START+KHEAP_INITIAL_SIZE; i += 0x1000)
-        alloc_frame( get_page(i, 1, kernel_directory), 0, 0);
+        alloc_frame( get_page(i, 1, kernel_directory), 1, 0);
 
     
     // Before we enable paging, we must register our page fault handler.
@@ -253,7 +253,7 @@ static page_table_t *clone_table(page_table_t *src, u32 *physAddr)
     // Make a new page table, which is page aligned.
     page_table_t *table = (page_table_t*)kmalloc_ap(sizeof(page_table_t), physAddr);
     // Ensure that the new table is blank.
-    memset((u8*)table, 0, sizeof(page_directory_t));
+    memset((u8*)table, 0, sizeof(page_table_t));
 
     // For every entry in the table...
     int i;
@@ -320,13 +320,17 @@ void map_pages(long addr, long size, int rw, int user)
     long i = addr;
     while (i < (addr+size+0x1000))
     {
-         if(i+size < memsize)
+         if (i < memsize) {
               set_frame(i); // Tell the frame bitmap that this frame is now used!
-         page_t *page = get_page(i, 1, current_directory);
-         page->present = 1;
-         page->rw = rw;
-         page->user = user;
-         page->frame = i / 0x1000;
+              page_t *page = get_page(i, 1, current_directory);
+              page->present = 1;
+              page->rw = rw;
+              page->user = user;
+              page->frame = i / 0x1000;
+         }
+         else {
+             KLOG(LOG_LEVEL_ERROR, "map_pages: skipping physical address 0x%X (beyond memsize=0x%X)\n", i, memsize);
+         }
          i += 0x1000;
     }
     return;
@@ -337,20 +341,18 @@ void virtual_map_pages(long addr, long size, int rw, int user)
     long i = addr;
     while (i < (addr+size+0x1000))
     {
-         if(i+size < memsize)
-         {
-              //Find first free frame
-              set_frame(first_frame());
-              //Then we set the space to taken anyway
-              kmalloc(0x1000);
-         }
-
-         page_t *page = get_page(i, 1, current_directory);
-         page->present = 1;
-         page->rw = rw;
-         page->user = user;
-         page->frame = i / 0x1000;
-         i += 0x1000;
+        page_t *page = get_page(i, 1, current_directory);
+        if (!page) {
+            KLOG(LOG_LEVEL_ERROR, "virtual_map_pages: get_page failed for 0x%X\n", i);
+            break;
+        }
+        // user: 1 means user-accessible, so we set is_kernel=0. user:0 means kernel-only, so is_kernel=1.
+        alloc_frame(page, (user==1)?0:1, rw);
+        if (page->frame == 0) {
+            KLOG(LOG_LEVEL_ERROR, "virtual_map_pages: alloc_frame failed for 0x%X\n", i);
+            break;
+        }
+        i += 0x1000;
     }
     return;
 }
@@ -364,7 +366,7 @@ void* alloc_task_stack_page(void) {
         return 0;
     }
 
-    alloc_frame(page, 1, 1); // is_kernel = 1, is_writeable = 1
+    alloc_frame(page, 0, 1); // is_kernel=0 (user), is_writeable=1
 
     void* result = (void*)next_stack_address;
     next_stack_address += 0x1000; // Go to the next page
