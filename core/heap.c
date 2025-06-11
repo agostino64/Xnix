@@ -57,12 +57,16 @@ u32 kmalloc_int(u32 sz, int align, u32 *phys)
 
 void kfree(void *p)
 {
-     if(kheap != 0)
-     {
-         free(p, kheap);
-     } else {
-         return;
-     }
+    if (kheap != 0)
+    {
+        KLOG(LOG_LEVEL_INFO, "Freeing memory at address 0x%X\n", (u32)p);
+        free(p, kheap);
+    }
+    else
+    {
+        KLOG(LOG_LEVEL_WARN, "kfree called with NULL kheap for address 0x%X\n", (u32)p);
+        return;
+    }
 }
 
 u32 kmalloc_a(u32 sz)
