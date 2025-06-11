@@ -36,7 +36,7 @@ u32 kmalloc_int(u32 sz, int align, u32 *phys)
     }
     else
     {
-        if (align == 1 && (placement_address & 0xFFFFF000) )
+        if (align == 1 && (placement_address & 0xFFF) != 0)
         {
             // Align the placement address;
             placement_address &= 0xFFFFF000;
@@ -463,6 +463,6 @@ void* krealloc(void* ptr, u32 old_size, u32 new_size)
 
 u32 get_memory_usage(void)
 {
-    return phys_mem_usage+(placement_address-0x1000); 
+    extern u32 end;
+    return phys_mem_usage + (placement_address - (u32)&end);
 }
-
