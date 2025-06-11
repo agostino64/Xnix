@@ -102,7 +102,7 @@ void acsii_func(char *args)
 
 void meminfo_func(char *args)
 {
-    printk("Kernel memory usage: %u bytes\n", get_memory_usage());
+    printk("Kernel memory usage: %u bytes / %u kB\n", get_memory_usage(), (get_memory_usage()/1024));
     printk("Shell buffer size: %u bytes\n", current_size);
 }
 
