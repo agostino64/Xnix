@@ -10,26 +10,20 @@
 # objdump -D -Mintel -b elf32-i386 -m i386 Image | less > dump.txt
 #
 
-DEBUG = 1
+DEBUG      := 1
+AS         := nasm
+CC         := i686-elf/bin/i686-elf-gcc
+LD         := i686-elf/bin/i686-elf-ld
+OUT        := Image
+FSPATH     := fs_files/
+BUILD_INFO := build_info.h
 
-AS = nasm
-CC = i686-elf/bin/i686-elf-gcc
-LD = i686-elf/bin/i686-elf-ld
-
-OUT = Image
-
-# Embed build user and OS into CFLAGS
-BUILD_USER := $(shell whoami)
-BUILD_OS   := $(shell uname -s)
-
-FSPATH = fs_files/
 # Use 'find' to get all the files and folders (recursive) in the directory
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
 CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin \
- -fomit-frame-pointer -I./include -fno-stack-protector \
- -DBUILD_USER=\"$(BUILD_USER)\" -DBUILD_OS=\"$(BUILD_OS)\"
+ -fomit-frame-pointer -I./include -fno-stack-protector 
 LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
 
@@ -73,21 +67,29 @@ SOURCES = core/boot.o \
 	  drivers/keyb.o \
 	  drivers/serial.o
 
-all: Image initrd
+all: $(BUILD_INFO) Image initrd
+
+$(BUILD_INFO):
+	@echo "Generating system info header"
+	@mkdir -p $(dir $@)
+	@printf "#ifndef BUILD_INFO_H\n#define BUILD_INFO_H\n" > $@
+	@printf "#define BUILD_USER \"%s\"\n" "$(shell whoami)" >> $@
+	@printf "#define BUILD_OS   \"%s\"\n" "$(shell uname -s)" >> $@
+	@printf "#endif /* BUILD_INFO_H */\n" >> $@
 
 Image: $(SOURCES)
 	@$(LD) $(LDFLAGS) -o $(OUT) $(SOURCES)
 	@echo ' '
 	@echo $(OUT)
 	
-%.o: %.c
+%.o: %.c $(BUILD_INFO)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img
+	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img $(BUILD_INFO)
 	rm -rf mkiso
 	
 iso: Image

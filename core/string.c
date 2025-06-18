@@ -2,7 +2,7 @@
 #include <xnix/string.h>
 
 
-const char* strchr(const char* str, char chr)
+char* strchr(const char* str, char chr)
 {
     if (str == NULL)
         return NULL;
@@ -10,7 +10,7 @@ const char* strchr(const char* str, char chr)
     while (*str)
     {
         if (*str == chr)
-            return str;
+            return (char *)str;
 
         ++str;
     }
