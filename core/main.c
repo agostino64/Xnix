@@ -40,19 +40,19 @@ u32 initial_esp;
 void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
 {
     clear_screen();     // ← now safe: stack is 16-byte aligned
-    printk("Xnix Kernel Booting...\n\n");
+    printk("Xnix Booting...\n\n");
     initial_esp = initial_stack;
 
     // -------------------------------
     // Step 1: Set up CPU descriptor tables
     // -------------------------------
-    printk("Initializing GDT/IDT...\n");
+    KLOG(LOG_LEVEL_INFO, "Initializing GDT/IDT...\n");
     init_descriptor_tables();
 
     // -------------------------------
     // Step 2: Initialize serial driver
     // -------------------------------
-    printk("Initializing serial driver...\n");
+    KLOG(LOG_LEVEL_INFO, "Initializing serial driver...\n");
     serial_init();
     KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
@@ -76,7 +76,7 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     // -------------------------------
     // Step 5: Initialize paging & heap
     // -------------------------------
-    printk("Initializing paging...\n");
+    KLOG(LOG_LEVEL_INFO, "Initializing paging...\n");
     u32 mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
     init_paging(mem_bytes);
     KLOG(LOG_LEVEL_INFO, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
@@ -93,27 +93,27 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     // -------------------------------
     // Step 6: Load initrd filesystem
     // -------------------------------
-    printk("Loading initrd...\n");
+    KLOG(LOG_LEVEL_INFO, "Loading initrd...\n");
     fs_root = initialise_initrd(initrd_location);
 
     // -------------------------------
     // Step 7: Initialize timer driver
     // -------------------------------
-    printk("Initializing timer driver...\n");
+    KLOG(LOG_LEVEL_INFO, "Initializing timer driver...\n");
     serial_init();
     KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     // -------------------------------
     // Step 8: Initialize keyboard driver
     // -------------------------------
-    printk("Initializing keyboard driver...\n");
+    KLOG(LOG_LEVEL_INFO, "Initializing keyboard driver...\n");
     init_keyboard();
     KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
-    printk("Launching tasking...\n");
+    KLOG(LOG_LEVEL_INFO, "Launching tasking...\n");
     initTasking(); // Task init on mainTask and switch to shellTask
 
-    printk("Shell is launched...\n");    
+    KLOG(LOG_LEVEL_INFO, "Shell is launched...\n");    
     yield(); // Switch to shellTask
     
     // now in mainTask
