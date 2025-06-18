@@ -10,11 +10,11 @@
 # objdump -D -Mintel -b elf32-i386 -m i386 Image | less > dump.txt
 #
 
-DEBUG = 1
+DEBUG = 0
 
 AS = nasm
-CC = gcc
-LD = ld
+CC = i686-elf/bin/i686-elf-gcc
+LD = i686-elf/bin/i686-elf-ld
 
 OUT = Image
 
@@ -23,9 +23,9 @@ FSPATH = fs_files/
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin  -I./include \
-	 -fno-stack-protector -m32
-LDFLAGS += -T linker.ld -m elf_i386
+CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin -I./include \
+	 -fno-stack-protector
+LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
 
 ifeq ($(DEBUG),1)
@@ -34,7 +34,7 @@ ifeq ($(DEBUG),1)
 endif
 
 ifeq ($(DEBUG),0)
-    CFLAGS  += -O2
+    CFLAGS  += -O
 endif
 
 ifeq ($(CC),clang)
@@ -55,7 +55,6 @@ SOURCES = core/boot.o \
 	  core/paging.o \
 	  core/vga.o \
 	  core/shell.o \
-	  core/drvmanager.o \
 	  core/initrd.o \
 	  core/fs.o \
 	  core/ordered_array.o \

@@ -19,8 +19,6 @@
 #include <xnix/drivers/serial.h>
 #include <xnix/common.h>
 #include <xnix/isr.h>
-#include <xnix/drv_register.h>
-#include <xnix/drv_control.h>
 
 #define COM1_PORT 0x3F8
 
@@ -91,7 +89,7 @@ void serial_irq_handler(registers_t regs) {
  *
  * Return: 0 on success
  */
-int serial_init(void) {
+void serial_init(void) {
     outb(COM1_PORT + 1, 0x00);    // Disable interrupts during setup
     outb(COM1_PORT + 3, 0x80);    // Enable DLAB
     outb(COM1_PORT + 0, 0x03);    // Set baud rate divisor to 3 (38400 baud)
@@ -106,7 +104,6 @@ int serial_init(void) {
     // Register IRQ4 handler (COM1)
     register_interrupt_handler(IRQ4, &serial_irq_handler);
     
-    return 0;
 }
 
 /**
@@ -118,8 +115,6 @@ int serial_init(void) {
 void serial_set_input_callback(void (*callback)(char)) {
     serial_input_callback = callback;
 }
-
-REGISTER_DRIVER(serial_init, DRV_SERIAL); // Register as driver
 
 // State machine for format parsing
 #define PRINTK_SERIAL_STATE_NORMAL         0

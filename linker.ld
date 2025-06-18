@@ -28,12 +28,5 @@ SECTIONS
     . = ALIGN(4096);
   }
 
-  .drivers :
-  {
-	  __start_drivers = .;
-	  *(.drivers)
-	  __stop_drivers = .;
-  }
-
   end = .; _end = .; __end = .;
 } 

@@ -7,5 +7,6 @@
 #include "../common.h"
 
 void timer_wait(u32 ticks);
+void init_timer(void);
 
 #endif

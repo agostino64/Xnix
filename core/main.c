@@ -14,7 +14,6 @@
 #include <xnix/isr.h>
 #include <xnix/heap.h>
 #include <xnix/paging.h>
-#include <xnix/drv_manager.h>
 #include <xnix/log.h>
 #include <xnix/multiboot.h>
 #include <xnix/drivers/serial.h>
@@ -54,9 +53,8 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     // Step 2: Initialize serial driver
     // -------------------------------
     printk("Initializing serial driver...\n");
-    if (drv_load(DRV_SERIAL) != 0) {
-        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_SERIAL\n");
-    }
+    serial_init();
+    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     // -------------------------------
     // Step 3: Enable interrupts
@@ -102,17 +100,15 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     // Step 7: Initialize timer driver
     // -------------------------------
     printk("Initializing timer driver...\n");
-    if (drv_load(DRV_TIMER) != 0) {
-        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_TIMER\n");
-    }
+    serial_init();
+    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     // -------------------------------
     // Step 8: Initialize keyboard driver
     // -------------------------------
     printk("Initializing keyboard driver...\n");
-    if (drv_load(DRV_KEYBOARD) != 0) {
-        KLOG(LOG_LEVEL_ERROR, "Failed to load DRV_KEYBOARD\n");
-    }
+    init_keyboard();
+    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     printk("Launching tasking...\n");
     initTasking(); // Task init on mainTask and switch to shellTask

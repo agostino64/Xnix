@@ -7,8 +7,6 @@
 #include <xnix/drivers/timer.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
-#include <xnix/drv_register.h>
-#include <xnix/drv_control.h>
 #include <xnix/common.h>
 #include <xnix/log.h>
 
@@ -51,7 +49,7 @@ void timer_wait(u32 ticks)
  *
  * Return: 0 on success
  */
-static int init_timer(void)
+void init_timer(void)
 {
     // Register IRQ0 handler
     register_interrupt_handler(IRQ0, &timer_callback);
@@ -71,8 +69,4 @@ static int init_timer(void)
     outb(0x40, h);
 
     KLOG(LOG_LEVEL_INFO, "PIT initialized to %u Hz (divisor=%u)\n", FREQUENCY, divisor);
-    return 0;
 }
-
-REGISTER_DRIVER(init_timer, DRV_TIMER);
-

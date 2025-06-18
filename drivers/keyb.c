@@ -15,8 +15,6 @@
 #include <xnix/common.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
-#include <xnix/drv_register.h>
-#include <xnix/drv_control.h>
 #include <xnix/log.h>
 #include <xnix/task.h>
 #include <xnix/cpu.h>    // for inb(), outb()
@@ -172,10 +170,9 @@ static void keyboard_handler(registers_t regs) {
 }
 
 // Initialize keyboard driver
-static int init_keyboard(void) {
+void init_keyboard(void) {
     register_interrupt_handler(IRQ1, &keyboard_handler);
     KLOG(LOG_LEVEL_INFO, "Keyboard driver initialized\n");
-    return 0;
 }
 
 // Low-level character read
@@ -214,7 +211,3 @@ char* gets(void) {
 char* get_input_buffer(void) {
     return (char*)buffer2;
 }
-
-// Register this driver with the kernel
-REGISTER_DRIVER(init_keyboard, DRV_KEYBOARD);
-
