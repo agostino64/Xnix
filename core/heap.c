@@ -7,6 +7,7 @@
 #include <xnix/vga.h>
 #include <xnix/common.h>
 #include <xnix/log.h>
+#include <xnix/memory.h>
 
 // end is defined in the linker script.
 extern u32 end;

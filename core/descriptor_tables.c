@@ -7,6 +7,7 @@
 
 #include <xnix/common.h>
 #include <xnix/descriptor_tables.h>
+#include <xnix/memory.h>
 
 // Lets us access our ASM functions from our C code.
 extern void gdt_flush(u32);

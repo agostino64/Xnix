@@ -61,6 +61,8 @@ SOURCES = core/boot.o \
 	  core/rtc.o \
 	  core/panic.o \
 	  core/task.o \
+	  core/memory.o \
+          core/string.o \
 	  core/switch_task.o \
 	  drivers/timer.o \
 	  drivers/keyb.o \

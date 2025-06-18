@@ -18,6 +18,7 @@
 #include <xnix/log.h>
 #include <xnix/initrd.h>
 #include <xnix/task.h>
+#include <xnix/string.h>
 
 #define XNIX_VERSION "1.1.2-2"
 #define BUILD_DATE __DATE__

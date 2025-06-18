@@ -35,12 +35,5 @@ void outw(u16 port, u16 value);
 u8 inb(u16 port);
 u16 inw(u16 port);
 
-void memset(void *dest, u8 val, u32 len);
-void memcpy(u8 *dest, const u8 *src, u32 len);
-int strcmp(char *str1, char *str2);
-char* strcpy(char* dest, const char* src);
-unsigned int strlen(const char *str);
-char *strchr(const char *s, int c);
-
 #endif
 

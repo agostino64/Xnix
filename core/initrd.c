@@ -8,6 +8,8 @@
 #include <xnix/fs.h>  // fs_node_t
 #include <xnix/log.h>  // fs_node_t
 #include <xnix/vga.h>  // fs_node_t
+#include <xnix/string.h>
+#include <xnix/memory.h>
 
 initrd_header_t *initrd_header;     // The header.
 initrd_file_header_t *file_headers; // The list of file headers.

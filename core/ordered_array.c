@@ -4,6 +4,7 @@
 
 #include <xnix/ordered_array.h>
 #include <xnix/heap.h>
+#include <xnix/memory.h>
 
 s8 standard_lessthan_predicate(type_t a, type_t b)
 {

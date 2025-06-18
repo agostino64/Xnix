@@ -9,6 +9,8 @@
 #include <xnix/cpu.h>
 #include <xnix/panic.h>
 #include <xnix/task.h>
+#include <xnix/memory.h>
+#include <xnix/string.h>
 
 // The kernel's page directory
 page_directory_t *kernel_directory=0;
