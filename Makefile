@@ -10,7 +10,7 @@
 # objdump -D -Mintel -b elf32-i386 -m i386 Image | less > dump.txt
 #
 
-DEBUG = 0
+DEBUG = 1
 
 AS = nasm
 CC = i686-elf/bin/i686-elf-gcc
@@ -23,13 +23,13 @@ FSPATH = fs_files/
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin -I./include \
-	 -fno-stack-protector
+CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin -fstrength-reduce \
+ -fomit-frame-pointer -I./include -fno-stack-protector
 LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
 
 ifeq ($(DEBUG),1)
-    CFLAGS  += -DLOG_LEVEL=LOG_LEVEL_DEBUG -g -Wall -Wstrict-prototypes
+    CFLAGS  += -DDEBUG -DLOG_LEVEL=LOG_LEVEL_DEBUG -g -Wall -Wstrict-prototypes
     ASFLAGS += -F dwarf -g
 endif
 

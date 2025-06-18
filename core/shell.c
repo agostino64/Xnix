@@ -70,14 +70,22 @@ void help_func(char *args)
 
 void version_func(char *args)
 {
-    printk("Xnix Version %s (%s %d.%d.%d) %s %s\n",
+    #ifdef DEBUG
+        #define IS_DEBUG 1
+    #else
+        #define IS_DEBUG 0
+    #endif
+
+    printk("xnix %s %s  (%s %d.%d.%d) %s %s\n",
         XNIX_VERSION,
+        IS_DEBUG ? "debug" : "release",
         BUILD_COMPILER,
         BUILD_COMPILER_MAJOR,
         BUILD_COMPILER_MINOR,
         BUILD_COMPILER_PATCH,
         BUILD_DATE,
         BUILD_TIME);
+	
 }
 
 void cpuinfo_func(char *args)
