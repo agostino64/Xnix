@@ -88,17 +88,19 @@ void version_func(char *args)
     #endif
 
     /* Print version, build mode, compiler, date/time */
-    printk("xnix %s %s@%s %s (%s %d.%d.%d) %s %s\n",
+    printk("xnix %s-%s #%s (%s %d.%d.%d) %s %s %s@%s/%s\n",
         XNIX_VERSION,
-	BUILD_USER,
-	BUILD_OS,
         IS_DEBUG ? "debug" : "release",
+        BUILD_NUM,
         BUILD_COMPILER,
         BUILD_COMPILER_MAJOR,
         BUILD_COMPILER_MINOR,
         BUILD_COMPILER_PATCH,
+        BUILD_TIME,
         BUILD_DATE,
-        BUILD_TIME);
+        BUILD_USER,
+	BUILD_OS,
+	BUILD_ARCH);
 }
 
 

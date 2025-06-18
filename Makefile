@@ -10,13 +10,14 @@
 # objdump -D -Mintel -b elf32-i386 -m i386 Image | less > dump.txt
 #
 
-DEBUG      := 1
-AS         := nasm
-CC         := i686-elf/bin/i686-elf-gcc
-LD         := i686-elf/bin/i686-elf-ld
-OUT        := Image
-FSPATH     := fs_files/
-BUILD_INFO := build_info.h
+DEBUG      	:= 1
+AS         	:= nasm
+CC         	:= i686-elf/bin/i686-elf-gcc
+LD         	:= i686-elf/bin/i686-elf-ld
+OUT        	:= Image
+FSPATH     	:= fs_files/
+BUILD_INFO 	:= build_info.h
+BUILD_NUM_FILE  := .build_number
 
 # Use 'find' to get all the files and folders (recursive) in the directory
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
@@ -67,29 +68,41 @@ SOURCES = core/boot.o \
 	  drivers/keyb.o \
 	  drivers/serial.o
 
-all: $(BUILD_INFO) Image initrd
+all: Image initrd
+
+.PHONY: $(BUILD_INFO)
 
 $(BUILD_INFO):
 	@echo "Generating system info header"
-	@mkdir -p $(dir $@)
-	@printf "#ifndef BUILD_INFO_H\n#define BUILD_INFO_H\n" > $@
-	@printf "#define BUILD_USER \"%s\"\n" "$(shell whoami)" >> $@
-	@printf "#define BUILD_OS   \"%s\"\n" "$(shell uname -s)" >> $@
-	@printf "#endif /* BUILD_INFO_H */\n" >> $@
+	@if [ ! -f $(BUILD_NUM_FILE) ]; then \
+		echo 0 > $(BUILD_NUM_FILE); \
+	fi
+	@BUILD_NUMBER=$$(($$(cat $(BUILD_NUM_FILE)) + 1)); \
+	echo $$BUILD_NUMBER > $(BUILD_NUM_FILE); \
+	{ \
+	printf "#ifndef BUILD_INFO_H\n#define BUILD_INFO_H\n"; \
+	printf "#define BUILD_USER \"%s\"\n" "$(shell whoami)"; \
+	printf "#define BUILD_OS   \"%s\"\n" "$(shell uname -s)"; \
+	printf "#define BUILD_ARCH \"%s\"\n" "$(shell uname -m)"; \
+	printf "#define BUILD_NUM  \"%d\"\n" $$BUILD_NUMBER; \
+	printf "#endif /* BUILD_INFO_H */\n"; \
+	} > $@.tmp; \
+	cmp -s $@.tmp $@ || mv $@.tmp $@; \
+	rm -f $@.tmp
 
 Image: $(SOURCES)
 	@$(LD) $(LDFLAGS) -o $(OUT) $(SOURCES)
 	@echo ' '
 	@echo $(OUT)
 	
-%.o: %.c $(BUILD_INFO)
+%.o: %.c | $(BUILD_INFO)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img $(BUILD_INFO)
+	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img $(BUILD_INFO) $(BUILD_NUM_FILE)
 	rm -rf mkiso
 	
 iso: Image
