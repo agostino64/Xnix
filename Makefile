@@ -18,13 +18,18 @@ LD = i686-elf/bin/i686-elf-ld
 
 OUT = Image
 
+# Embed build user and OS into CFLAGS
+BUILD_USER := $(shell whoami)
+BUILD_OS   := $(shell uname -s)
+
 FSPATH = fs_files/
 # Use 'find' to get all the files and folders (recursive) in the directory
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin -fstrength-reduce \
- -fomit-frame-pointer -I./include -fno-stack-protector
+CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin \
+ -fomit-frame-pointer -I./include -fno-stack-protector \
+ -DBUILD_USER=\"$(BUILD_USER)\" -DBUILD_OS=\"$(BUILD_OS)\"
 LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
 

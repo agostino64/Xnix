@@ -20,7 +20,7 @@
 #include <xnix/task.h>
 #include <xnix/string.h>
 
-#define XNIX_VERSION "1.1.2-2"
+#define XNIX_VERSION "1.1.2-3"
 #define BUILD_DATE __DATE__
 #define BUILD_TIME __TIME__
 
@@ -41,6 +41,15 @@
     #define BUILD_COMPILER_PATCH 0
 #endif
 
+#ifndef BUILD_OS
+    #define BUILD_OS "Unknown"
+#endif
+
+#ifndef BUILD_USER
+    #define BUILD_USER "unknown"
+#endif
+
+
 #define INITIAL_SIZE 10
 
 // Shell buffer and state
@@ -57,15 +66,15 @@ void help_func(char *args)
 {
     printk("Xnix %s\n\n", XNIX_VERSION);
     printk("Commands:\n");
-    printk("  version     Show version\n");
-    printk("  clear       Clear screen\n");
-    printk("  reboot      Reboot system\n");
-    printk("  shutdown    Power off system\n");
-    printk("  cpuinfo     Display CPU info\n");
-    printk("  xnix        Show ASCII logo\n");
-    printk("  mem         Show memory info\n");
-    printk("  ls          List files in RAMFS\n");
-    printk("  cat         Read files from RAMFS\n");
+    printk(" version   Show version\n");
+    printk(" clear     Clear screen\n");
+    printk(" reboot    Reboot system\n");
+    printk(" shutdown  Power off system\n");
+    printk(" cpuinfo   Display CPU info\n");
+    printk(" xnix      Show ASCII logo\n");
+    printk(" mem       Show memory info\n");
+    printk(" ls        List files in RAMFS\n");
+    printk(" cat       Read files from RAMFS\n");
     printk("\nCopyright (C) 2023, 2025 Agustin Gutierrez (agostino64)\n");
 }
 
@@ -77,8 +86,11 @@ void version_func(char *args)
         #define IS_DEBUG 0
     #endif
 
-    printk("xnix %s %s  (%s %d.%d.%d) %s %s\n",
+    /* Print version, build mode, compiler, date/time */
+    printk("xnix %s %s@%s %s (%s %d.%d.%d) %s %s\n",
         XNIX_VERSION,
+	BUILD_USER,
+	BUILD_OS,
         IS_DEBUG ? "debug" : "release",
         BUILD_COMPILER,
         BUILD_COMPILER_MAJOR,
@@ -86,8 +98,8 @@ void version_func(char *args)
         BUILD_COMPILER_PATCH,
         BUILD_DATE,
         BUILD_TIME);
-	
 }
+
 
 void cpuinfo_func(char *args)
 {
@@ -95,18 +107,6 @@ void cpuinfo_func(char *args)
         detect_cpu();
     else
         printk("cpuid extension is not supported by the CPU.\n");
-}
-
-void acsii_func(char *args)
-{
-    const char *ascii_xnix =
-        " __  __      _       ___  ____        \n"
-        " \\ \\/ /_ __ (_)_  __/ _ \\/ ___|    \n"
-        "  \\  /|  _ \\| \\ \\/ / | | \\___ \\ \n"
-        "  /  \\| | | | |>  <| |_| |___) |     \n"
-        " /_/\\_\\_| |_|_/_/\\_\\\\___/|____/  \n";
-
-    printk("%s\n", ascii_xnix);
 }
 
 void meminfo_func(char *args)
@@ -124,7 +124,7 @@ void cat_fs(char *args)
 {
     if (args == NULL || *args == '\0')
     {
-        printk("Usage: cat <filename>\n");
+        printk("usage: cat <filename>\n");
         return;
     }
 
@@ -146,7 +146,7 @@ void exec_cmd(const char *input, Command *cmds, int num_cmds)
     char *space = strchr(input, ' ');
     char *cmd_name = NULL;
     char *cmd_args = NULL;
-
+    
     if (space)
     {
         *space = '\0';
@@ -168,7 +168,7 @@ void exec_cmd(const char *input, Command *cmds, int num_cmds)
         }
     }
 
-    printk("%s: Command not found.\n", cmd_name);
+    printk("%s: command not found\n", cmd_name);
 }
 
 /**
@@ -183,7 +183,6 @@ void cmd_init(void)
         { "reboot", (cmd_func_t)reboot },
         { "shutdown", (cmd_func_t)shutdown },
         { "cpuinfo", cpuinfo_func },
-        { "xnix", acsii_func },
         { "mem", meminfo_func },
         { "ls", list_fs },
         { "cat", cat_fs }
@@ -235,7 +234,7 @@ void shell_task(void) {
 
     // Main shell loop
     while (1) {
-        printk("%s@kernel:> ", dir);
+        printk("%s:> ", dir);
 
         // Read line (blocks internally)
         gets();
