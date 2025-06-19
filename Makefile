@@ -83,7 +83,6 @@ $(BUILD_INFO):
 	printf "#ifndef BUILD_INFO_H\n#define BUILD_INFO_H\n"; \
 	printf "#define BUILD_USER \"%s\"\n" "$(shell whoami)"; \
 	printf "#define BUILD_OS   \"%s\"\n" "$(shell uname -s)"; \
-	printf "#define BUILD_ARCH \"%s\"\n" "$(shell uname -m)"; \
 	printf "#define BUILD_NUM  \"%d\"\n" $$BUILD_NUMBER; \
 	printf "#endif /* BUILD_INFO_H */\n"; \
 	} > $@.tmp; \
