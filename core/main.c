@@ -44,17 +44,16 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     initial_esp = initial_stack;
 
     // -------------------------------
-    // Step 1: Set up CPU descriptor tables
-    // -------------------------------
-    KLOG(LOG_LEVEL_INFO, "Initializing GDT/IDT...\n");
-    init_descriptor_tables();
-
-    // -------------------------------
     // Step 2: Initialize serial driver
     // -------------------------------
     KLOG(LOG_LEVEL_INFO, "Initializing serial driver...\n");
     serial_init();
-    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
+
+    // -------------------------------
+    // Step 1: Set up CPU descriptor tables
+    // -------------------------------
+    KLOG(LOG_LEVEL_INFO, "Initializing GDT/IDT...\n");
+    init_descriptor_tables();
 
     // -------------------------------
     // Step 3: Enable interrupts
@@ -79,12 +78,12 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     KLOG(LOG_LEVEL_INFO, "Initializing paging...\n");
     u32 mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
     init_paging(mem_bytes);
-    KLOG(LOG_LEVEL_INFO, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
+    KLOG(LOG_LEVEL_DEBUG, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
 
     // Memory allocation test
     u32 malloc_test = kmalloc(100);
     if (malloc_test != 0) {
-        KLOG(LOG_LEVEL_INFO, "Heap test successful: allocated 100 bytes at 0x%x\n", (u32)malloc_test);
+        KLOG(LOG_LEVEL_DEBUG, "Heap test successful: allocated 100 bytes at 0x%x\n", (u32)malloc_test);
         kfree((void*)malloc_test);
     } else {
         KLOG(LOG_LEVEL_ERROR, "Heap test failed: kmalloc returned NULL\n");
@@ -101,23 +100,21 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
     // -------------------------------
     KLOG(LOG_LEVEL_INFO, "Initializing timer driver...\n");
     serial_init();
-    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     // -------------------------------
     // Step 8: Initialize keyboard driver
     // -------------------------------
     KLOG(LOG_LEVEL_INFO, "Initializing keyboard driver...\n");
     init_keyboard();
-    KLOG(LOG_LEVEL_ERROR, "Failed to load\n");
 
     KLOG(LOG_LEVEL_INFO, "Launching tasking...\n");
     initTasking(); // Task init on mainTask and switch to shellTask
 
-    KLOG(LOG_LEVEL_INFO, "Shell is launched...\n");    
+    KLOG(LOG_LEVEL_DEBUG, "Shell is launched...\n");    
     yield(); // Switch to shellTask
     
     // now in mainTask
-    KLOG(LOG_LEVEL_INFO, "Not in shell task!\n");
+    KLOG(LOG_LEVEL_DEBUG, "Not in shell task!\n");
     yield(); // Switch to shellTask
     
     // Should never return; fallback in case shell exits
