@@ -52,8 +52,6 @@ static u32 next_taskId = 1;
  * context switching to the other task.
  */
 void initTasking(void) {
-    KLOG(LOG_LEVEL_INFO, "[Tasking] Initializing multitasking...\n");
-
     // Capture CR3 (current page directory) and flags (EFLAGS)
     __asm__ __volatile__ ("movl %%cr3, %%eax; movl %%eax, %0;\n" : "=m"(mainTask.regs.cr3) :: "%eax");
     __asm__ __volatile__ ("pushfl; movl (%%esp), %%eax; movl %%eax, %0; popfl;\n" : "=m"(mainTask.regs.eflags) :: "%eax");

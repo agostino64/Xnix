@@ -32,7 +32,7 @@ u32 kmalloc_int(u32 sz, int align, u32 *phys)
             KLOG(LOG_LEVEL_DEBUG, "Physical address allocated: 0x%X\n", *phys);
         }
         phys_mem_usage += sz;
-        KLOG(LOG_LEVEL_INFO, "Allocated %u bytes on heap at 0x%X\n", sz, (u32)addr);
+        KLOG(LOG_LEVEL_DEBUG, "Allocated %u bytes on heap at 0x%X\n", sz, (u32)addr);
         return (u32)addr;
     }
     else
@@ -340,7 +340,7 @@ void *alloc(u32 size, u8 page_align, heap_t *heap)
         // Put the new hole in the index;
         insert_ordered_array((void*)hole_header, &heap->index);
     }
-    KLOG(LOG_LEVEL_INFO, "[heap] Allocated block of size %u at 0x%X\n", new_size, (u32)block_header + sizeof(header_t));
+    KLOG(LOG_LEVEL_DEBUG, "[heap] Allocated block of size %u at 0x%X\n", new_size, (u32)block_header + sizeof(header_t));
     // ...And we're done!
     return (void *) ( (u32)block_header+sizeof(header_t) );
 }
