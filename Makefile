@@ -64,13 +64,16 @@ SOURCES = core/boot.o \
 	  core/memory.o \
           core/string.o \
 	  core/switch_task.o \
+	  core/version.o \
 	  drivers/timer.o \
 	  drivers/keyb.o \
 	  drivers/serial.o
 
 all: Image initrd
 
-.PHONY: $(BUILD_INFO)
+.PHONY: $(BUILD_INFO) FORCE
+
+FORCE:
 
 $(BUILD_INFO):
 	@echo "Generating system info header"
@@ -93,6 +96,9 @@ Image: $(SOURCES)
 	@$(LD) $(LDFLAGS) -o $(OUT) $(SOURCES)
 	@echo ' '
 	@echo $(OUT)
+	
+core/version.o: core/version.c FORCE
+	$(CC) $(CFLAGS) -c $< -o $@
 	
 %.o: %.c | $(BUILD_INFO)
 	$(CC) $(CFLAGS) -c $< -o $@

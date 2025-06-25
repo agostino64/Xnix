@@ -20,37 +20,6 @@
 #include <xnix/initrd.h>
 #include <xnix/task.h>
 #include <xnix/string.h>
-#include "../build_info.h"
-
-#define XNIX_VERSION "1.1.2-3"
-#define BUILD_DATE __DATE__
-#define BUILD_TIME __TIME__
-
-#ifdef __clang__
-    #define BUILD_COMPILER "Clang"
-    #define BUILD_COMPILER_MAJOR __clang_major__
-    #define BUILD_COMPILER_MINOR __clang_minor__
-    #define BUILD_COMPILER_PATCH __clang_patchlevel__
-#elif defined(__GNUC__)
-    #define BUILD_COMPILER "GCC"
-    #define BUILD_COMPILER_MAJOR __GNUC__
-    #define BUILD_COMPILER_MINOR __GNUC_MINOR__
-    #define BUILD_COMPILER_PATCH __GNUC_PATCHLEVEL__
-#else
-    #define BUILD_COMPILER "Unknown"
-    #define BUILD_COMPILER_MAJOR 0
-    #define BUILD_COMPILER_MINOR 0
-    #define BUILD_COMPILER_PATCH 0
-#endif
-
-#ifndef BUILD_OS
-    #define BUILD_OS "Unknown"
-#endif
-
-#ifndef BUILD_USER
-    #define BUILD_USER "unknown"
-#endif
-
 
 #define INITIAL_SIZE 10
 
@@ -66,7 +35,6 @@ extern int _cpuid_support(void);
 
 void help_func(char *args)
 {
-    printk("Xnix %s\n\n", XNIX_VERSION);
     printk("Commands:\n");
     printk(" version   Show version\n");
     printk(" clear     Clear screen\n");
@@ -80,29 +48,11 @@ void help_func(char *args)
     printk("\nCopyright (C) 2023, 2025 Agustin Gutierrez (agostino64)\n");
 }
 
+extern const char xnix_proc_banner[];
+
 void version_func(char *args)
 {
-    #ifdef DEBUG
-        #define IS_DEBUG 1
-    #else
-        #define IS_DEBUG 0
-    #endif
-    
-    const char *build_number = BUILD_NUM;
-
-    /* Print version, build mode, compiler, date/time */
-    printk("xnix %s-%s #%s %s %s (%s %d.%d.%d - %s@%s)\n",
-        XNIX_VERSION,
-        IS_DEBUG ? "debug" : "release",
-        build_number,
-        BUILD_TIME,
-        BUILD_DATE,
-        BUILD_COMPILER,
-        BUILD_COMPILER_MAJOR,
-        BUILD_COMPILER_MINOR,
-        BUILD_COMPILER_PATCH,
-        BUILD_USER,
-	BUILD_OS);
+    printk("%s\n", xnix_proc_banner);
 }
 
 
