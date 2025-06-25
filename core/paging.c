@@ -1,6 +1,7 @@
 // paging.c -- Defines the interface for and structures relating to paging.
 //             Written for JamesM's kernel development tutorials.
 
+#include <stdint.h>
 #include <xnix/paging.h>
 #include <xnix/heap.h>
 #include <xnix/common.h>
@@ -19,13 +20,13 @@ page_directory_t *kernel_directory=0;
 page_directory_t *current_directory=0;
 
 // A bitset of frames - used or free.
-u32 *frames;
-u32 nframes;
+uint32_t *frames;
+uint32_t nframes;
 
-volatile u32 memsize = 0;
+volatile uint32_t memsize = 0;
 
 // Defined in kheap.c
-extern u32 placement_address;
+extern uint32_t placement_address;
 extern heap_t *kheap;
 
 // Defined in process.asm
@@ -36,36 +37,36 @@ extern void copy_page_physical(unsigned int src,unsigned int page);
 #define OFFSET_FROM_BIT(a) (a%(8*4))
 
 // Static function to set a bit in the frames bitset
-static void set_frame(u32 frame_addr)
+static void set_frame(uint32_t frame_addr)
 {
-    u32 frame = frame_addr/0x1000;
-    u32 idx = INDEX_FROM_BIT(frame);
-    u32 off = OFFSET_FROM_BIT(frame);
+    uint32_t frame = frame_addr/0x1000;
+    uint32_t idx = INDEX_FROM_BIT(frame);
+    uint32_t off = OFFSET_FROM_BIT(frame);
     frames[idx] |= (0x1 << off);
     //KLOG(LOG_LEVEL_DEBUG, "Set frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
 }
 
 // Static function to clear a bit in the frames bitset
-static void clear_frame(u32 frame_addr)
+static void clear_frame(uint32_t frame_addr)
 {
-    u32 frame = frame_addr/0x1000;
-    u32 idx = INDEX_FROM_BIT(frame);
-    u32 off = OFFSET_FROM_BIT(frame);
+    uint32_t frame = frame_addr/0x1000;
+    uint32_t idx = INDEX_FROM_BIT(frame);
+    uint32_t off = OFFSET_FROM_BIT(frame);
     frames[idx] &= ~(0x1 << off);
     KLOG(LOG_LEVEL_DEBUG, "Cleared frame: 0x%X (bit %d in index %d)\n", frame_addr, off, idx);
 }
 
 // Static function to find the first free frame.
-static u32 first_frame(void)
+static uint32_t first_frame(void)
 {
-    u32 i, j;
+    uint32_t i, j;
     for (i = 0; i < INDEX_FROM_BIT(nframes); i++)
     {
         if (frames[i] != 0xFFFFFFFF)
         {
             for (j = 0; j < 32; j++)
             {
-                u32 toTest = 0x1 << j;
+                uint32_t toTest = 0x1 << j;
                 if ( !(frames[i]&toTest) )
                 {
                     //KLOG(LOG_LEVEL_DEBUG, "First free frame: %d\n", i*4*8+j);
@@ -75,7 +76,7 @@ static u32 first_frame(void)
         }
     }
     KLOG(LOG_LEVEL_ERROR, "No free frames available!\n");
-    return (u32)-1;
+    return (uint32_t)-1;
 }
 
 void alloc_frame(page_t *page, int is_kernel, int is_writeable)
@@ -84,8 +85,8 @@ void alloc_frame(page_t *page, int is_kernel, int is_writeable)
         return;
     else
     {
-        u32 idx = first_frame();
-        if (idx == (u32)-1)
+        uint32_t idx = first_frame();
+        if (idx == (uint32_t)-1)
         {
             //panic("no free frames!!");
         }
@@ -100,7 +101,7 @@ void alloc_frame(page_t *page, int is_kernel, int is_writeable)
 
 void free_frame(page_t *page)
 {
-    u32 frame;
+    uint32_t frame;
     if (!(frame=page->frame))
         return;
     else
@@ -114,18 +115,18 @@ void free_frame(page_t *page)
 void init_paging(unsigned int memorysz)
 {
     // The size of physical memory.
-    u32 mem_end_page = memorysz;
+    uint32_t mem_end_page = memorysz;
     memsize = memorysz;
     
     nframes = mem_end_page / 0x1000;
-    frames = (u32*)kmalloc(INDEX_FROM_BIT(nframes));
-    memset((u8*)frames, 0, INDEX_FROM_BIT(nframes));
+    frames = (uint32_t*)kmalloc(INDEX_FROM_BIT(nframes));
+    memset((uint8_t*)frames, 0, INDEX_FROM_BIT(nframes));
     
     // Let's make a page directory.
-    //u32 phys;
+    //uint32_t phys;
     kernel_directory = (page_directory_t*)kmalloc_a(sizeof(page_directory_t));
-    memset((u8*)kernel_directory, 0, sizeof(page_directory_t));
-    kernel_directory->physicalAddr = (u32)kernel_directory->tablesPhysical;
+    memset((uint8_t*)kernel_directory, 0, sizeof(page_directory_t));
+    kernel_directory->physicalAddr = (uint32_t)kernel_directory->tablesPhysical;
 
     // Map some pages in the kernel heap area.
     // Here we call get_page but not alloc_frame. This causes page_table_t's 
@@ -176,18 +177,18 @@ void switch_page_directory(page_directory_t *dir)
 {
     current_directory = dir;
     __asm__ __volatile__("mov %0, %%cr3":: "r"(dir->physicalAddr));
-    u32 cr0;
+    uint32_t cr0;
     __asm__ __volatile__("mov %%cr0, %0": "=r"(cr0));
     cr0 |= 0x80000000; // Enable paging!
     __asm__ __volatile__("mov %0, %%cr0":: "r"(cr0));
 }
 
-page_t *get_page(u32 address, int make, page_directory_t *dir)
+page_t *get_page(uint32_t address, int make, page_directory_t *dir)
 {
     // Turn the address into an index.
     address /= 0x1000;
     // Find the page table containing this address.
-    u32 table_idx = address / 1024;
+    uint32_t table_idx = address / 1024;
 
     if (dir->tables[table_idx]) // If this table is already assigned
     {
@@ -195,9 +196,9 @@ page_t *get_page(u32 address, int make, page_directory_t *dir)
     }
     else if(make)
     {
-        u32 tmp;
+        uint32_t tmp;
         dir->tables[table_idx] = (page_table_t*)kmalloc_ap(sizeof(page_table_t), &tmp);
-        memset((u8*)dir->tables[table_idx], 0, 0x1000);
+        memset((uint8_t*)dir->tables[table_idx], 0, 0x1000);
         dir->tablesPhysical[table_idx] = tmp | 0x7; // PRESENT, RW, US.
         return &dir->tables[table_idx]->pages[address%1024];
     }
@@ -214,7 +215,7 @@ void page_fault(registers_t regs)
     
     // A page fault has occurred.
     // The faulting address is stored in the CR2 register.
-    u32 faulting_address;
+    uint32_t faulting_address;
     __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
     
     // The error code gives us details of what happened.
@@ -224,7 +225,7 @@ void page_fault(registers_t regs)
     int reserved = regs.err_code & 0x8;     // Overwritten CPU-reserved bits of page entry?
     //int id = regs.err_code & 0x10;          // Caused by an instruction fetch?
     
-    u32 cr2;
+    uint32_t cr2;
     __asm__ __volatile__("mov %%cr2, %0": "=r"(cr2));
 
     // Output an error message.
@@ -250,12 +251,12 @@ void page_fault(registers_t regs)
     	//PANIC("Page fault");
 }
 
-static page_table_t *clone_table(page_table_t *src, u32 *physAddr)
+static page_table_t *clone_table(page_table_t *src, uint32_t *physAddr)
 {
     // Make a new page table, which is page aligned.
     page_table_t *table = (page_table_t*)kmalloc_ap(sizeof(page_table_t), physAddr);
     // Ensure that the new table is blank.
-    memset((u8*)table, 0, sizeof(page_table_t));
+    memset((uint8_t*)table, 0, sizeof(page_table_t));
 
     // For every entry in the table...
     int i;
@@ -281,14 +282,14 @@ static page_table_t *clone_table(page_table_t *src, u32 *physAddr)
 
 page_directory_t *clone_directory(page_directory_t *src)
 {
-    u32 phys;
+    uint32_t phys;
     // Make a new page directory and obtain its physical address.
     page_directory_t *dir = (page_directory_t*)kmalloc_ap(sizeof(page_directory_t), &phys);
     // Ensure that it is blank.
-    memset((u8*)dir, 0, sizeof(page_directory_t));
+    memset((uint8_t*)dir, 0, sizeof(page_directory_t));
 
     // Get the offset of tablesPhysical from the start of the page_directory_t structure.
-    u32 offset = (u32)dir->tablesPhysical - (u32)dir;
+    uint32_t offset = (uint32_t)dir->tablesPhysical - (uint32_t)dir;
 
     // Then the physical address of dir->tablesPhysical is:
     dir->physicalAddr = phys + offset;
@@ -309,7 +310,7 @@ page_directory_t *clone_directory(page_directory_t *src)
         else
         {
             // Copy the table.
-            u32 phys;
+            uint32_t phys;
             dir->tables[i] = clone_table(src->tables[i], &phys);
             dir->tablesPhysical[i] = phys | 0x07;
         }
@@ -360,7 +361,7 @@ void virtual_map_pages(long addr, long size, int rw, int user)
 }
 
 void* alloc_task_stack_page(void) {
-    static u32 next_stack_address = ADDR_PAGE_TASK;
+    static uint32_t next_stack_address = ADDR_PAGE_TASK;
 
     page_t *page = get_page(next_stack_address, 1, current_directory);
     if (!page) {

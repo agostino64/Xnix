@@ -5,6 +5,7 @@
  *  Copyright (C) 2022, 2025  Agustin Gutierrez
  */
 
+#include <stdint.h>
 #include <xnix/common.h>
 #include <xnix/drivers/serial.h>
 
@@ -15,17 +16,17 @@
 #define TAB_SIZE 4
 
 // VGA framebuffer starts at memory location 0xB8000
-u16 *video_memory = (u16*)0xb8000;
+uint16_t *video_memory = (uint16_t*)0xb8000;
 
 // Cursor position
-u32 cursor_y, cursor_x;
+uint32_t cursor_y, cursor_x;
 
 /**
  * move_cursor - Updates the hardware cursor location using VGA ports.
  */
 static void move_cursor(void)
 {
-    u16 cursorLocation = cursor_y * 80 + cursor_x;
+    uint16_t cursorLocation = cursor_y * 80 + cursor_x;
     
     outb(0x3D4, 14);                  // Set high byte
     outb(0x3D5, cursorLocation >> 8);
@@ -38,15 +39,15 @@ static void move_cursor(void)
  */
 static void scroll(void)
 {
-    u8 attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
-    u16 blank = 0x20 | (attributeByte << 8); // space character with attribute
+    uint8_t attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
+    uint16_t blank = 0x20 | (attributeByte << 8); // space character with attribute
 
     if (cursor_y >= 25)
     {
-        for (s32 i = 0; i < 24 * 80; i++)
+        for (int32_t i = 0; i < 24 * 80; i++)
             video_memory[i] = video_memory[i + 80];
 
-        for (s32 i = 24 * 80; i < 25 * 80; i++)
+        for (int32_t i = 24 * 80; i < 25 * 80; i++)
             video_memory[i] = blank;
 
         cursor_y = 24;
@@ -58,9 +59,9 @@ static void scroll(void)
  */
 void put(const char c)
 {
-    u8 attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
-    u16 attribute = attributeByte << 8;
-    u16 *location;
+    uint8_t attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
+    uint16_t attribute = attributeByte << 8;
+    uint16_t *location;
 
     switch (c)
     {
@@ -110,10 +111,10 @@ void put(const char c)
  */
 void clear_screen(void)
 {
-    u8 attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
-    u16 blank = 0x20 | (attributeByte << 8);
+    uint8_t attributeByte = (FOREGROUND << 4) | (BACKGROUND & 0x0F);
+    uint16_t blank = 0x20 | (attributeByte << 8);
 
-    for (s32 i = 0; i < 80 * 25; i++)
+    for (int32_t i = 0; i < 80 * 25; i++)
         video_memory[i] = blank;
 
     cursor_x = 0;
@@ -126,7 +127,7 @@ void clear_screen(void)
  */
 void write(const char *c)
 {
-    for (s32 i = 0; c[i]; i++)
+    for (int32_t i = 0; c[i]; i++)
         put(c[i]);
 }
 
@@ -150,10 +151,10 @@ const char hexchars[] = "0123456789abcdef";
 /**
  * printk_unsigned - Converts an unsigned long to a string and prints it.
  */
-void printk_unsigned(unsigned long number, s32 radix)
+void printk_unsigned(unsigned long number, int32_t radix)
 {
     char buffer[32];
-    s32 pos = 0;
+    int32_t pos = 0;
 
     do
     {
@@ -168,7 +169,7 @@ void printk_unsigned(unsigned long number, s32 radix)
 /**
  * printk_signed - Handles signed long numbers (adds '-' if needed).
  */
-void printk_signed(long number, s32 radix)
+void printk_signed(long number, int32_t radix)
 {
     if (number < 0)
     {
@@ -184,9 +185,9 @@ void printk_signed(long number, s32 radix)
  */
 void vprintk(const char* fmt, va_list args)
 {
-    s32 state = PRINTK_STATE_NORMAL;
-    s32 length = PRINTK_LENGTH_DEFAULT;
-    s32 radix = 10;
+    int32_t state = PRINTK_STATE_NORMAL;
+    int32_t length = PRINTK_LENGTH_DEFAULT;
+    int32_t radix = 10;
     bool sign = false;
     bool number = false;
 
@@ -240,7 +241,7 @@ void vprintk(const char* fmt, va_list args)
             PRINTK_STATE_SPEC_:
                 switch (*fmt)
                 {
-                    case 'c':   put((char)va_arg(args, s32)); break;
+                    case 'c':   put((char)va_arg(args, int32_t)); break;
                     case 's':   write((char*)va_arg(args, const char*)); break;
                     case '%':   put('%'); break;
 
@@ -262,14 +263,14 @@ void vprintk(const char* fmt, va_list args)
                         if (length == PRINTK_LENGTH_LONG)
                             printk_signed(va_arg(args, long), radix);
                         else
-                            printk_signed(va_arg(args, s32), radix);
+                            printk_signed(va_arg(args, int32_t), radix);
                     }
                     else
                     {
                         if (length == PRINTK_LENGTH_LONG)
                             printk_unsigned(va_arg(args, unsigned long), radix);
                         else
-                            printk_unsigned(va_arg(args, u32), radix);
+                            printk_unsigned(va_arg(args, uint32_t), radix);
                     }
                 }
 

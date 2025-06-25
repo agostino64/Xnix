@@ -16,6 +16,7 @@
  *    - Formatted output with `printk_serial()` and `vprintk_serial()`
  */
 
+#include <stdint.h>
 #include <xnix/drivers/serial.h>
 #include <xnix/common.h>
 #include <xnix/isr.h>
@@ -72,7 +73,7 @@ char serial_read_char(void) {
  * Reads the incoming character and calls the registered callback, if any.
  */
 void serial_irq_handler(registers_t regs) {
-    u8 status = inb(COM1_PORT + 5);
+    uint8_t status = inb(COM1_PORT + 5);
     if (status & 1) {
         char c = serial_read_char();
         if (serial_input_callback) {
@@ -136,9 +137,9 @@ const char hexchars_serial[] = "0123456789abcdef";
  * @number: value to print
  * @radix: base (e.g., 10 for decimal, 16 for hex)
  */
-void printk_serial_unsigned(unsigned long number, s32 radix) {
+void printk_serial_unsigned(unsigned long number, int32_t radix) {
     char buffer[32];
-    s32 pos = 0;
+    int32_t pos = 0;
 
     do {
         buffer[pos++] = hexchars_serial[number % radix];
@@ -154,7 +155,7 @@ void printk_serial_unsigned(unsigned long number, s32 radix) {
  * @number: value to print
  * @radix: base (e.g., 10 for decimal, 16 for hex)
  */
-void printk_serial_signed(long number, s32 radix) {
+void printk_serial_signed(long number, int32_t radix) {
     if (number < 0) {
         serial_write_char('-');
         printk_serial_unsigned(-number, radix);
@@ -172,9 +173,9 @@ void printk_serial_signed(long number, s32 radix) {
  */
 void vprintk_serial(const char* fmt, va_list args)
 {
-    s32 state = PRINTK_SERIAL_STATE_NORMAL;
-    s32 length = PRINTK_SERIAL_LENGTH_DEFAULT;
-    s32 radix = 10;
+    int32_t state = PRINTK_SERIAL_STATE_NORMAL;
+    int32_t length = PRINTK_SERIAL_LENGTH_DEFAULT;
+    int32_t radix = 10;
     bool sign = false;
     bool number = false;
 
@@ -216,7 +217,7 @@ void vprintk_serial(const char* fmt, va_list args)
             case PRINTK_SERIAL_STATE_SPEC:
             PRINTK_SERIAL_STATE_SPEC_:
                 switch (*fmt) {
-                    case 'c':   serial_write_char((char)va_arg(args, s32)); break;
+                    case 'c':   serial_write_char((char)va_arg(args, int32_t)); break;
                     case 's':   serial_write_string((char*)va_arg(args, const char*)); break;
                     case '%':   serial_write_char('%'); break;
                     case 'd':
@@ -237,14 +238,14 @@ void vprintk_serial(const char* fmt, va_list args)
                         if (length == PRINTK_SERIAL_LENGTH_LONG)
                             printk_serial_signed(va_arg(args, long), radix);
                         else
-                            printk_serial_signed(va_arg(args, s32), radix);
+                            printk_serial_signed(va_arg(args, int32_t), radix);
                     }
                     else
                     {
                         if (length == PRINTK_SERIAL_LENGTH_LONG)
                             printk_serial_unsigned(va_arg(args, unsigned long), radix);
                         else
-                            printk_serial_unsigned(va_arg(args, u32), radix);
+                            printk_serial_unsigned(va_arg(args, uint32_t), radix);
                     }
                 }
 

@@ -1,6 +1,7 @@
 // initrd.c -- Defines the interface for and structures relating to the initial ramdisk.
 //             Written for JamesM's kernel development tutorials.
 
+#include <stdint.h>
 #include <xnix/initrd.h>
 #include <xnix/common.h>
 #include <xnix/heap.h>
@@ -22,19 +23,19 @@ struct dirent dirent;
 
 static char *buffer = NULL;
 
-static u32 initrd_read(fs_node_t *node, u32 offset, u32 size, u8 *buffer)
+static uint32_t initrd_read(fs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer)
 {
     initrd_file_header_t header = file_headers[node->inode];
     if (offset > header.length)
         return 0;
     if (offset+size > header.length)
         size = header.length-offset;
-    memcpy(buffer, (u8*) (header.offset+offset), size);
+    memcpy(buffer, (uint8_t*) (header.offset+offset), size);
     KLOG(LOG_LEVEL_DEBUG, "Reading %u bytes from initrd file '%s' at offset %u\n", size, node->name, offset);
     return size;
 }
 
-static struct dirent *initrd_readdir(fs_node_t *node, u32 index)
+static struct dirent *initrd_readdir(fs_node_t *node, uint32_t index)
 {
     if (node == initrd_root && index == 0)
     {
@@ -65,7 +66,7 @@ static fs_node_t *initrd_finddir(fs_node_t *node, char *name)
     return 0;
 }
 
-fs_node_t *initialise_initrd(u32 location)
+fs_node_t *initialise_initrd(uint32_t location)
 {
     KLOG(LOG_LEVEL_INFO, "Initializing initrd at memory location 0x%x\n", location);
     // Initialise the main and file header pointers and populate the root directory.
@@ -183,7 +184,7 @@ int read_initrd(char *file)
 {
     int i = 0;
     struct dirent *node = 0;
-    static u32 mem_size = 264;
+    static uint32_t mem_size = 264;
 
     if (buffer == NULL)
         buffer = (char*)kmalloc(mem_size);
@@ -208,12 +209,12 @@ int read_initrd(char *file)
         {
             KLOG(LOG_LEVEL_DEBUG, "node->name and %s match.\n", file);
 
-            u32 size = read_fs(fsnode, 0, mem_size, (u8*)buffer);
-            for (u32 j = 0; j < size; j++)
+            uint32_t size = read_fs(fsnode, 0, mem_size, (uint8_t*)buffer);
+            for (uint32_t j = 0; j < size; j++)
                 put(buffer[j]);
 
             // Optionally null-terminate or expand
-            u32 len = size + 1;
+            uint32_t len = size + 1;
             char *new_buffer = (char*)krealloc(buffer, mem_size, len);
             if (new_buffer)
             {

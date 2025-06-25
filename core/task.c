@@ -21,6 +21,7 @@
  *  ---------------------------------------------------------------
  */
 
+#include <stdint.h>
 #include <xnix/isr.h>
 #include <xnix/task.h>
 #include <xnix/vga.h>
@@ -42,7 +43,7 @@ extern void* alloc_task_stack_page(void);
 
 extern void shell_task(void);
 
-static u32 next_taskId = 1;
+static uint32_t next_taskId = 1;
 
 /**
  * @brief Initializes the cooperative multitasking subsystem.
@@ -59,7 +60,7 @@ void initTasking(void) {
     KLOG(LOG_LEVEL_DEBUG, "[Tasking] mainTask CR3: 0x%X, EFLAGS: 0x%X\n", mainTask.regs.cr3, mainTask.regs.eflags);
 
     // Create secondary task
-    createTask(&shellTask, shell_task, mainTask.regs.eflags, (u32*)mainTask.regs.cr3);
+    createTask(&shellTask, shell_task, mainTask.regs.eflags, (uint32_t*)mainTask.regs.cr3);
 
     // Link the tasks in a circular list
     mainTask.next = &shellTask;
@@ -79,7 +80,7 @@ void initTasking(void) {
  * @param flags    EFLAGS for the task.
  * @param pagedir  CR3 (page directory) that the task will use.
  */
-void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
+void createTask(Task *task, void (*main), uint32_t flags, uint32_t *pagedir) {
     if ((!task) & (!main) & (!pagedir)) {
         KLOG(LOG_LEVEL_ERROR, "[Tasking] createTask received null pointer!\n");
         KLOG(LOG_LEVEL_DEBUG, "Running task id=%d\n", task->taskId);
@@ -97,11 +98,11 @@ void createTask(Task *task, void (*main), u32 flags, u32 *pagedir) {
     task->regs.esi = 0;
     task->regs.edi = 0;
     task->regs.eflags = flags;
-    task->regs.eip = (u32) main;
-    task->regs.cr3 = (u32) pagedir;
+    task->regs.eip = (uint32_t) main;
+    task->regs.cr3 = (uint32_t) pagedir;
 
     // Allocate a new stack page and point ESP to its end
-    task->regs.esp = (u32) alloc_task_stack_page() + 0x1000;
+    task->regs.esp = (uint32_t) alloc_task_stack_page() + 0x1000;
     task->regs.ebp = task->regs.esp;    // <— initialize EBP to the top of stack
 
     task->next = 0;

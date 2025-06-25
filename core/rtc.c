@@ -7,6 +7,7 @@
  *  Provides functions to read the current date and time from the CMOS RTC.
  */
 
+#include <stdint.h>
 #include <xnix/common.h>
 #include <xnix/rtc.h>
 #include <xnix/log.h>
@@ -29,7 +30,7 @@
  * @param reg The register index to read from.
  * @return The byte value stored in the specified CMOS register.
  */
-static u8 read_rtc_register(u8 reg) {
+static uint8_t read_rtc_register(uint8_t reg) {
     outb(CMOS_ADDRESS, reg);
     return inb(CMOS_DATA);
 }
@@ -40,7 +41,7 @@ static u8 read_rtc_register(u8 reg) {
  * @param bcd The BCD value to convert.
  * @return The equivalent binary value.
  */
-static u8 bcd_to_bin(u8 bcd)
+static uint8_t bcd_to_bin(uint8_t bcd)
 {
     return (bcd & 0x0F) + ((bcd / 16) * 10);
 }
@@ -56,10 +57,10 @@ static u8 bcd_to_bin(u8 bcd)
 rtc_time_t read_rtc_time(void)
 {
     rtc_time_t time;
-    u8 century = 20; // CMOS typically lacks century storage; default to 20xx.
+    uint8_t century = 20; // CMOS typically lacks century storage; default to 20xx.
 
     // Read status register B to determine time format (binary vs BCD)
-    u8 regB = read_rtc_register(CMOS_STATUS_B);
+    uint8_t regB = read_rtc_register(CMOS_STATUS_B);
     bool binary = regB & 0x04;
 
     // Read values twice to ensure no time rollover between reads

@@ -1,15 +1,16 @@
 #ifndef _RTC_H
 #define _RTC_H
 
+#include <stdint.h>
 #include "common.h"
 
 typedef struct {
-    u8 second;
-    u8 minute;
-    u8 hour;
-    u8 day;
-    u8 month;
-    u16 year;
+    uint8_t second;
+    uint8_t minute;
+    uint8_t hour;
+    uint8_t day;
+    uint8_t month;
+    uint16_t year;
 } rtc_time_t;
 
 // Reads the current time from the RTC

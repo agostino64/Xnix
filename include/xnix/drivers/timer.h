@@ -4,9 +4,10 @@
 #ifndef TIMER_H
 #define TIMER_H
 
+#include <stdint.h>
 #include "../common.h"
 
-void timer_wait(u32 ticks);
+void timer_wait(uint32_t ticks);
 void init_timer(void);
 
 #endif

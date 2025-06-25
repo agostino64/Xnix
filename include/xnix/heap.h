@@ -6,6 +6,7 @@
 #ifndef HEAP_H
 #define HEAP_H
 
+#include <stdint.h>
 #include "common.h"
 #include "paging.h"
 #include "ordered_array.h"
@@ -23,40 +24,40 @@
 **/
 typedef struct
 {
-    u32 magic;   // Magic number, used for error checking and identification.
-    u8 is_hole;   // 1 if this is a hole. 0 if this is a block.
-    u32 size;    // size of the block, including the end footer.
+    uint32_t magic;   // Magic number, used for error checking and identification.
+    uint8_t is_hole;   // 1 if this is a hole. 0 if this is a block.
+    uint32_t size;    // size of the block, including the end footer.
 } header_t;
 
 typedef struct
 {
-    u32 magic;     // Magic number, same as in header_t.
+    uint32_t magic;     // Magic number, same as in header_t.
     header_t *header; // Pointer to the block header.
 } footer_t;
 
 typedef struct
 {
     ordered_array_t index;
-    u32 start_address; // The start of our allocated space.
-    u32 end_address;   // The end of our allocated space. May be expanded up to max_address.
-    u32 max_address;   // The maximum address the heap can be expanded to.
-    u8 supervisor;     // Should extra pages requested by us be mapped as supervisor-only?
-    u8 readonly;       // Should extra pages requested by us be mapped as read-only?
+    uint32_t start_address; // The start of our allocated space.
+    uint32_t end_address;   // The end of our allocated space. May be expanded up to max_address.
+    uint32_t max_address;   // The maximum address the heap can be expanded to.
+    uint8_t supervisor;     // Should extra pages requested by us be mapped as supervisor-only?
+    uint8_t readonly;       // Should extra pages requested by us be mapped as read-only?
 } heap_t;
 
 /**
    Create a new heap.
 **/
-heap_t *create_heap(u32 start, u32 end, u32 max, u8 supervisor, u8 readonly);
+heap_t *create_heap(uint32_t start, uint32_t end, uint32_t max, uint8_t supervisor, uint8_t readonly);
 
 /**
    Allocates a contiguous region of memory 'size' in size. If page_align==1, it creates that block starting
    on a page boundary.
 **/
-void *alloc(u32 size, u8 page_align, heap_t *heap);
+void *alloc(uint32_t size, uint8_t page_align, heap_t *heap);
 
 //With physical address
-void alloc_frame_p(page_t *page, int is_kernel, int is_writeable, u32 phys);
+void alloc_frame_p(page_t *page, int is_kernel, int is_writeable, uint32_t phys);
 
 /**
    Releases a block allocated with 'alloc'.
@@ -72,30 +73,30 @@ void free(void *p, heap_t *heap);
    parameter representations are available in kmalloc, kmalloc_a,
    kmalloc_ap, kmalloc_p.
 **/
-u32 kmalloc_int(u32 sz, int align, u32 *phys);
+uint32_t kmalloc_int(uint32_t sz, int align, uint32_t *phys);
 
 /**
    Allocate a chunk of memory, sz in size. The chunk must be
    page aligned.
 **/
-u32 kmalloc_a(u32 sz);
+uint32_t kmalloc_a(uint32_t sz);
 
 /**
    Allocate a chunk of memory, sz in size. The physical address
-   is returned in phys. Phys MUST be a valid pointer to u32!
+   is returned in phys. Phys MUST be a valid pointer to uint32_t!
 **/
-u32 kmalloc_p(u32 sz, u32 *phys);
+uint32_t kmalloc_p(uint32_t sz, uint32_t *phys);
 
 /**
    Allocate a chunk of memory, sz in size. The physical address 
    is returned in phys. It must be page-aligned.
 **/
-u32 kmalloc_ap(u32 sz, u32 *phys);
+uint32_t kmalloc_ap(uint32_t sz, uint32_t *phys);
 
 /**
    General allocation function.
 **/
-u32 kmalloc(u32 sz);
+uint32_t kmalloc(uint32_t sz);
 
 /**
    General deallocation function.
@@ -105,17 +106,17 @@ void kfree(void *p);
 /**
    General reallocation function.
 **/
-void* krealloc(void* ptr, u32 old_size, u32 new_size);
+void* krealloc(void* ptr, uint32_t old_size, uint32_t new_size);
 
 /**
    Return amount of memory used
 **/
-u32 get_memory_usage(void);
+uint32_t get_memory_usage(void);
 
 /**
    Expand and contract heap
 **/
-void expand(u32 new_size, heap_t *heap);
-u32 contract(u32 new_size, heap_t *heap);
+void expand(uint32_t new_size, heap_t *heap);
+uint32_t contract(uint32_t new_size, heap_t *heap);
 
 #endif // HEAP_H

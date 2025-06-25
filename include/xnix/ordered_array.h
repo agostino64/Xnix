@@ -5,36 +5,37 @@
 #ifndef ORDERED_ARRAY_H
 #define ORDERED_ARRAY_H
 
+#include <stdint.h>
 #include "common.h"
 
 /**
    This array is insertion sorted - it always remains in a sorted state (between calls).
-   It can store anything that can be cast to a void* -- so a u32, or any pointer.
+   It can store anything that can be cast to a void* -- so a uint32_t, or any pointer.
 **/
 typedef void* type_t;
 /**
    A predicate should return nonzero if the first argument is less than the second. Else 
    it should return zero.
 **/
-typedef s8 (*lessthan_predicate_t)(type_t,type_t);
+typedef int8_t (*lessthan_predicate_t)(type_t,type_t);
 typedef struct
 {
     type_t *array;
-    u32 size;
-    u32 max_size;
+    uint32_t size;
+    uint32_t max_size;
     lessthan_predicate_t less_than;
 } ordered_array_t;
 
 /**
    A standard less than predicate.
 **/
-s8 standard_lessthan_predicate(type_t a, type_t b);
+int8_t standard_lessthan_predicate(type_t a, type_t b);
 
 /**
    Create an ordered array.
 **/
-ordered_array_t create_ordered_array(u32 max_size, lessthan_predicate_t less_than);
-ordered_array_t place_ordered_array(void *addr, u32 max_size, lessthan_predicate_t less_than);
+ordered_array_t create_ordered_array(uint32_t max_size, lessthan_predicate_t less_than);
+ordered_array_t place_ordered_array(void *addr, uint32_t max_size, lessthan_predicate_t less_than);
 
 /**
    Destroy an ordered array.
@@ -49,11 +50,11 @@ void insert_ordered_array(type_t item, ordered_array_t *array);
 /**
    Lookup the item at index i.
 **/
-type_t lookup_ordered_array(u32 i, ordered_array_t *array);
+type_t lookup_ordered_array(uint32_t i, ordered_array_t *array);
 
 /**
    Deletes the item at location i from the array.
 **/
-void remove_ordered_array(u32 i, ordered_array_t *array);
+void remove_ordered_array(uint32_t i, ordered_array_t *array);
 
 #endif // ORDERED_ARRAY_H

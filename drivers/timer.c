@@ -4,6 +4,7 @@
  *  Adapted from JamesM's kernel development tutorials.
  */
 
+#include <stdint.h>
 #include <xnix/drivers/timer.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
@@ -12,8 +13,8 @@
 
 #define FREQUENCY 50  // Target frequency in Hz (50Hz = 20ms tick)
 
-u32 tick = 0;
-volatile u32 wait_ticks = 0;
+uint32_t tick = 0;
+volatile uint32_t wait_ticks = 0;
 
 /**
  * timer_callback - IRQ0 handler, called on each PIT tick.
@@ -33,7 +34,7 @@ static void timer_callback(registers_t regs)
  * timer_wait - Busy-wait for a number of timer ticks.
  * @ticks: number of ticks to wait (at 50Hz, 50 ticks = 1 second)
  */
-void timer_wait(u32 ticks)
+void timer_wait(uint32_t ticks)
 {
     wait_ticks = 0;
     KLOG(LOG_LEVEL_DEBUG, "Waiting for %u ticks\n", ticks);
@@ -56,15 +57,15 @@ void init_timer(void)
     KLOG(LOG_LEVEL_INFO, "Registered IRQ0 handler for system timer.\n");
 
     // Calculate divisor for PIT (1193180 Hz input clock)
-    u32 divisor = 1193180 / FREQUENCY;
+    uint32_t divisor = 1193180 / FREQUENCY;
 
     // Send command byte to PIT
     outb(0x43, 0x36);  // Channel 0, LSB/MSB, mode 3, binary
     KLOG(LOG_LEVEL_DEBUG, "Sending PIT command byte: 0x36\n");
 
     // Send divisor LSB then MSB
-    u8 l = (u8)(divisor & 0xFF);
-    u8 h = (u8)((divisor >> 8) & 0xFF);
+    uint8_t l = (uint8_t)(divisor & 0xFF);
+    uint8_t h = (uint8_t)((divisor >> 8) & 0xFF);
     outb(0x40, l);
     outb(0x40, h);
 

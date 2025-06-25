@@ -4,6 +4,7 @@
 // Rewritten for JamesM's kernel development tutorials.
 //
 
+#include <stdint.h>
 #include <xnix/common.h>
 #include <xnix/isr.h>
 #include <xnix/vga.h>
@@ -13,7 +14,7 @@
 
 isr_t interrupt_handlers[256];
 
-void register_interrupt_handler(u8 n, isr_t handler)
+void register_interrupt_handler(uint8_t n, isr_t handler)
 {
   interrupt_handlers[n] = handler;
 } 

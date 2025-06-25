@@ -8,6 +8,7 @@
  *  Halts the system after printing detailed CPU state.
  */
 
+#include <stdint.h>
 #include <xnix/common.h>
 #include <xnix/log.h>
 #include <xnix/drivers/serial.h>
@@ -60,7 +61,7 @@ void panic(registers_t* regs, const char* message)
  * This function logs debug info and halts the system.
  */
 __attribute__((noreturn))
-void panic_assert(const char *file, u32 line, const char* message) 
+void panic_assert(const char *file, uint32_t line, const char* message) 
 {
     printk("\n\n*** KERNEL PANIC ***\n");
     printk("Reason: %s\n", message);

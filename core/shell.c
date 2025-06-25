@@ -7,6 +7,7 @@
  *  with support for internal commands and dynamic input buffer resizing.
  */
 
+#include <stdint.h>
 #include <xnix/common.h>
 #include <xnix/vga.h>
 #include <xnix/drivers/keyb.h>
@@ -56,7 +57,7 @@
 // Shell buffer and state
 static char *cmd = NULL;
 static char *dir = NULL;
-static u32 current_size = INITIAL_SIZE;
+static uint32_t current_size = INITIAL_SIZE;
 
 // External CPU check
 extern int _cpuid_support(void);
@@ -86,12 +87,14 @@ void version_func(char *args)
     #else
         #define IS_DEBUG 0
     #endif
+    
+    const char *build_number = BUILD_NUM;
 
     /* Print version, build mode, compiler, date/time */
     printk("xnix %s-%s #%s %s %s (%s %d.%d.%d - %s@%s)\n",
         XNIX_VERSION,
         IS_DEBUG ? "debug" : "release",
-        BUILD_NUM,
+        build_number,
         BUILD_TIME,
         BUILD_DATE,
         BUILD_COMPILER,
@@ -199,8 +202,8 @@ void cmd_init(void)
  * Runs as a cooperative task and yields after each command.
  */
 void shell_task(void) {
-    u32 dir_buf_size = INITIAL_SIZE;
-    u32 idx;
+    uint32_t dir_buf_size = INITIAL_SIZE;
+    uint32_t idx;
     struct dirent *node;
 
     KLOG(LOG_LEVEL_INFO, "[Shell] starting shell_task\n");
@@ -217,7 +220,7 @@ void shell_task(void) {
     while (node) {
         fs_node_t *fsnode = finddir_fs(fs_root, node->name);
         if ((fsnode->flags & 0x7) == FS_DIRECTORY) {
-            u32 len = strlen(node->name) + 1;
+            uint32_t len = strlen(node->name) + 1;
             if (len > dir_buf_size) {
                 char *new_dir = (char*)krealloc(dir, dir_buf_size, len);
                 if (new_dir) {
@@ -241,7 +244,7 @@ void shell_task(void) {
         // Read line (blocks internally)
         gets();
         char *input = get_input_buffer();
-        u32 input_len = strlen(input) + 1;
+        uint32_t input_len = strlen(input) + 1;
 
         // Resize cmd buffer if needed
         if (input_len > current_size) {

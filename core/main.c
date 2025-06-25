@@ -4,6 +4,7 @@
  *  Copyright (C) 2022, 2025  Agustin Gutierrez
  */
 
+#include <stdint.h>
 #include <xnix/vga.h>
 #include <xnix/descriptor_tables.h>
 #include <xnix/drivers/timer.h>
@@ -22,8 +23,8 @@
 #include <xnix/panic.h>
 #include <xnix/task.h>
 
-extern u32 placement_address;
-u32 initial_esp;
+extern uint32_t placement_address;
+uint32_t initial_esp;
 
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
@@ -37,7 +38,7 @@ u32 initial_esp;
  *  6. Shell
  *
  */
-void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
+void start_kernel(uint32_t initial_stack, struct multiboot *mboot_ptr)
 {
     clear_screen();     // ← now safe: stack is 16-byte aligned
     printk("Xnix Booting...\n\n");
@@ -68,22 +69,22 @@ void start_kernel(u32 initial_stack, struct multiboot *mboot_ptr)
         panic(NULL, "No modules found (initrd missing)!");
     }
 
-    u32 initrd_location = *(u32*)mboot_ptr->mods_addr;
-    u32 initrd_end      = *(u32*)(mboot_ptr->mods_addr + 4);
+    uint32_t initrd_location = *(uint32_t*)mboot_ptr->mods_addr;
+    uint32_t initrd_end      = *(uint32_t*)(mboot_ptr->mods_addr + 4);
     placement_address   = initrd_end;  // Avoid overwriting initrd
 
     // -------------------------------
     // Step 5: Initialize paging & heap
     // -------------------------------
     KLOG(LOG_LEVEL_INFO, "Initializing paging...\n");
-    u32 mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
+    uint32_t mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
     init_paging(mem_bytes);
     KLOG(LOG_LEVEL_DEBUG, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
 
     // Memory allocation test
-    u32 malloc_test = kmalloc(100);
+    uint32_t malloc_test = kmalloc(100);
     if (malloc_test != 0) {
-        KLOG(LOG_LEVEL_DEBUG, "Heap test successful: allocated 100 bytes at 0x%x\n", (u32)malloc_test);
+        KLOG(LOG_LEVEL_DEBUG, "Heap test successful: allocated 100 bytes at 0x%x\n", (uint32_t)malloc_test);
         kfree((void*)malloc_test);
     } else {
         KLOG(LOG_LEVEL_ERROR, "Heap test failed: kmalloc returned NULL\n");

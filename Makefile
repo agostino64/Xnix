@@ -23,7 +23,7 @@ BUILD_NUM_FILE  := .build_number
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -std=c11 -nostdlib -nostdinc -fno-builtin \
+CFLAGS += -std=c11 -nostdlib -ffreestanding \
  -fomit-frame-pointer -I./include -fno-stack-protector 
 LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
