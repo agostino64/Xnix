@@ -72,7 +72,7 @@ char serial_read_char(void) {
  *
  * Reads the incoming character and calls the registered callback, if any.
  */
-void serial_irq_handler(registers_t regs) {
+void serial_irq_handler(registers_t *regs) {
     uint8_t status = inb(COM1_PORT + 5);
     if (status & 1) {
         char c = serial_read_char();
