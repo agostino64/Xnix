@@ -1,24 +1,16 @@
 /*
- *  Xnix
+ * Xnix
  *
- *  Copyright (C) 2025  Agustin Gutierrez
+ * Copyright (C) 2025  Agustin Gutierrez
  *
- *  Base code taken from https://wiki.osdev.org/Cooperative_Multitasking
+ * ---------------------------------------------------------------
+ * This file implements a preemptive, timer-based multitasking
+ * system for the Xnix kernel. A round-robin scheduler
+ * is invoked by the timer interrupt to switch tasks.
  *
- *  ---------------------------------------------------------------
- *  This file implements a basic cooperative multitasking system
- *  for the Xnix operating system. Tasks are represented by Task
- *  structures and are manually switched using the yield() function.
- *  
- *  The goal is to allow multiple execution contexts to share the CPU
- *  by explicitly yielding control. A circular linked list of tasks is
- *  used, and context switching is performed by saving/restoring CPU
- *  registers.
- *
- *  This initial implementation serves as a foundation for evolving
- *  into more advanced multitasking with scheduling (e.g., round-robin,
- *  priorities, etc.).
- *  ---------------------------------------------------------------
+ * Cooperative yielding is supported via a software interrupt,
+ * which unifies all context switches through the same scheduler.
+ * ---------------------------------------------------------------
  */
 
 #include <stdint.h>
@@ -27,105 +19,166 @@
 #include <xnix/vga.h>
 #include <xnix/log.h>
 #include <xnix/shell.h>
+#include <xnix/paging.h>
+#include <xnix/heap.h>
 
-/// Global structure pointing to the currently running task
-static Task *runningTask;
+/// Defines the size of the stack allocated for each new task. 4KB is standard.
+#define TASK_STACK_SIZE 4096
 
-/// Main task (the kernel or initial process)
-static Task mainTask;
+// Global state for the tasking system
+static Task *runningTask;       ///< Global pointer to the currently executing task.
+static Task mainTask;           ///< The main kernel task.
+static Task shellTask;          ///< The secondary task for the shell.
+static Task printTask;         ///< The secondary task for the serial port.
+static int next_task_id = 1;    ///< ID for the next task to be created.
 
-/// Secondary test task (cooperative)
+// External dependencies
+extern void shell_task(void);               ///< External entry point for the shell task.
+extern void print_task(void);
 
-static Task shellTask;
-
-/// External: allocates a page for the stack of a new task (defined elsewhere)
-extern void* alloc_task_stack_page(void);
-
-extern void shell_task(void);
-
-static uint32_t next_taskId = 1;
+extern page_directory_t *kernel_directory;  ///< The kernel's page directory, from paging.c.
 
 /**
- * @brief Initializes the cooperative multitasking subsystem.
+ * @brief Core round-robin scheduler.
  *
- * This function sets up the main task, creates a secondary task (otherMain),
- * and links both in a circular list. It then calls yield() to begin
- * context switching to the other task.
+ * Saves the state of the current task, selects the next task from the
+ * circular list, and restores its state to perform a context switch. It also
+ * handles switching the virtual address space.
  */
-void initTasking(void) {
-    // Capture CR3 (current page directory) and flags (EFLAGS)
-    __asm__ __volatile__ ("movl %%cr3, %%eax; movl %%eax, %0;\n" : "=m"(mainTask.regs.cr3) :: "%eax");
-    __asm__ __volatile__ ("pushfl; movl (%%esp), %%eax; movl %%eax, %0; popfl;\n" : "=m"(mainTask.regs.eflags) :: "%eax");
+void schedule(registers_t *regs)
+{
+    // Exit if multitasking is not yet initialized.
+    if (!runningTask) return;
 
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] mainTask CR3: 0x%X, EFLAGS: 0x%X\n", mainTask.regs.cr3, mainTask.regs.eflags);
-
-    // Create secondary task
-    createTask(&shellTask, shell_task, mainTask.regs.eflags, (uint32_t*)mainTask.regs.cr3);
-
-    // Link the tasks in a circular list
-    mainTask.next = &shellTask;
-    shellTask.next = &mainTask;
-
-    runningTask = &mainTask;
+    // Save the state of the interrupted task from the stack frame.
+    runningTask->regs.esp = regs->esp;
+    runningTask->regs.ebp = regs->ebp;
+    runningTask->regs.eax = regs->eax;
+    runningTask->regs.ebx = regs->ebx;
+    runningTask->regs.ecx = regs->ecx;
+    runningTask->regs.edx = regs->edx;
+    runningTask->regs.esi = regs->esi;
+    runningTask->regs.edi = regs->edi;
+    runningTask->regs.eip = regs->eip;
+    runningTask->regs.eflags = regs->eflags;
     
-    KLOG(LOG_LEVEL_INFO, "[Tasking] Multitasking initialized. Running mainTask\n");
-    KLOG(LOG_LEVEL_DEBUG, "Running task id=%u\n", runningTask->taskId);
+    // Select the next task to run.
+    runningTask = runningTask->next;
+
+    // Restore the state of the new task into the interrupt stack frame.
+    regs->esp = runningTask->regs.esp;
+    regs->ebp = runningTask->regs.ebp;
+    regs->eax = runningTask->regs.eax;
+    regs->ebx = runningTask->regs.ebx;
+    regs->ecx = runningTask->regs.ecx;
+    regs->edx = runningTask->regs.edx;
+    regs->esi = runningTask->regs.esi;
+    regs->edi = runningTask->regs.edi;
+    regs->eip = runningTask->regs.eip;
+    regs->eflags = runningTask->regs.eflags;
+    regs->cs = 0x08; // Kernel Code Segment
+    regs->ds = 0x10; // Kernel Data Segment
+
+    // Switch to the new task's address space.
+    switch_page_directory(runningTask->page_directory);
 }
 
 /**
- * @brief Creates a new task and initializes it with a stack and context.
- * 
- * @param task     Pointer to the Task structure to initialize.
- * @param main     Entry point function for the task.
- * @param flags    EFLAGS for the task.
- * @param pagedir  CR3 (page directory) that the task will use.
+ * @brief Voluntarily yields CPU control via a software interrupt.
  */
-void createTask(Task *task, void (*main), uint32_t flags, uint32_t *pagedir) {
-    if ((!task) & (!main) & (!pagedir)) {
-        KLOG(LOG_LEVEL_ERROR, "[Tasking] createTask received null pointer!\n");
-        KLOG(LOG_LEVEL_DEBUG, "Running task id=%d\n", task->taskId);
+void yield(void)
+{
+    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Task %d yielding CPU.\n", runningTask ? runningTask->id : -1);
+    __asm__ __volatile__ ("int $0x80");
+}
+
+/**
+ * @brief Creates and initializes a new task.
+ *
+ * Allocates a new stack, sets up the initial register state (EIP, ESP, EFLAGS),
+ * and inserts the task into the scheduler's circular linked list.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int create_task(Task *parent, Task *new_task, void (*entry)(void), page_directory_t *page_dir)
+{
+    if (!parent || !new_task || !entry || !page_dir) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] createTask received one or more null pointers.\n");
+        return -1;
+    }
+
+    uint32_t stack = (uint32_t)kmalloc(TASK_STACK_SIZE);
+    if (!stack) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to allocate stack for new task ID %d.\n", next_task_id);
+        return -1;
+    }
+
+    new_task->id = next_task_id++;
+    new_task->regs.eax = 0;
+    new_task->regs.ebx = 0;
+    new_task->regs.ecx = 0;
+    new_task->regs.edx = 0;
+    new_task->regs.esi = 0;
+    new_task->regs.edi = 0;
+    new_task->regs.eflags = 0x202; // Interrupts enabled flag.
+    new_task->regs.eip = (uint32_t)entry;
+    new_task->page_directory = page_dir;
+
+    // Allocate a 4KB stack for the new task from the kernel heap.
+    new_task->regs.esp = (uint32_t)kmalloc(4096) + 4096;
+    new_task->regs.ebp = new_task->regs.esp;
+
+    // Insert the new task into the circular list after the parent.
+    new_task->next = parent->next;
+    parent->next = new_task;
+
+    KLOG(LOG_LEVEL_INFO,
+         "[Tasking] Created task %d (entry=0x%X, stack_top=0x%X) with parent %d\n",
+         new_task->id, new_task->regs.eip, new_task->regs.esp, parent->id);
+
+    return 0;
+}
+
+/**
+ * @brief Initializes the multitasking system.
+ */
+void init_tasking(void)
+{
+    __asm__ __volatile__ ("cli"); // Disable interrupts during initialization.
+    KLOG(LOG_LEVEL_INFO, "[Tasking] Initializing multitasking...\n");
+
+    // 1. Initialize the main kernel task.
+    mainTask.id = next_task_id++;
+    mainTask.page_directory = kernel_directory;
+    mainTask.next = &mainTask; // It's the only task, so it points to itself.
+
+    // 2. Create the shell task with its own address space.
+    page_directory_t *shell_page_dir = clone_directory(kernel_directory);
+    if (!shell_page_dir) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to clone page directory for shell task.\n");
+        // In a real scenario, this would be a fatal kernel panic.
+        return;
+    }
+    if (create_task(&mainTask, &shellTask, shell_task, shell_page_dir) != 0) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to create the shell task.\n");
+        return;
+    }
+    
+    // 2. Create the serial task with its own address space.
+    page_directory_t *print_page_dir = clone_directory(kernel_directory);
+    if (!shell_page_dir) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to clone page directory for serial port task.\n");
+        // In a real scenario, this would be a fatal kernel panic.
+        return;
+    }
+    if (create_task(&mainTask, &printTask, print_task, print_page_dir) != 0) {
+        KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to create the print task.\n");
         return;
     }
 
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Creating new task at %pfor entry point %p\n", task, main);
+    // 3. Set the main task as the first running task.
+    runningTask = &mainTask;
+    KLOG(LOG_LEVEL_INFO, "[Tasking] System initialized. Starting with task ID %d.\n", runningTask->id);
 
-    task->taskId = next_taskId++;
-    // Initialize registers with safe default values
-    task->regs.eax = 0;
-    task->regs.ebx = 0;
-    task->regs.ecx = 0;
-    task->regs.edx = 0;
-    task->regs.esi = 0;
-    task->regs.edi = 0;
-    task->regs.eflags = flags;
-    task->regs.eip = (uint32_t) main;
-    task->regs.cr3 = (uint32_t) pagedir;
-
-    // Allocate a new stack page and point ESP to its end
-    task->regs.esp = (uint32_t) alloc_task_stack_page() + 0x1000;
-    task->regs.ebp = task->regs.esp;    // <— initialize EBP to the top of stack
-
-    task->next = 0;
-
-    KLOG(LOG_LEVEL_INFO, "[Tasking] Task created: id=%u entry=0x%X, stack=0x%X\n", task->taskId, task->regs.eip, task->regs.esp);
-}
-
-/**
- * @brief Voluntarily yields CPU control to the next task.
- *
- * This function performs cooperative context switching between tasks.
- * It saves the state of the current task and restores the state of the next one.
- */
-void yield(void) {
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Yielding from task at EIP=0x%X TASK ID=%u\n", runningTask->regs.eip, runningTask->taskId);
-
-    // Save the current task and switch to the next
-    Task *last = runningTask;
-    runningTask = runningTask->next;
-
-    KLOG(LOG_LEVEL_DEBUG, "[Tasking] Switching to task at EIP=0x%X TASK ID=%u\n", runningTask->regs.eip, runningTask->taskId);
-    KLOG(LOG_LEVEL_DEBUG, "Task %d context: EIP=0x%x ESP=0x%x EBP=0x%x\n", runningTask->taskId, runningTask->regs.eip, runningTask->regs.esp, runningTask->regs.ebp);
-    
-    // Perform the context switch
-    switchTask(&last->regs, &runningTask->regs);
+    __asm__ __volatile__ ("sti"); // Re-enable interrupts to start scheduling.
 }

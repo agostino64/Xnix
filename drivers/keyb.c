@@ -81,7 +81,7 @@ static void do_gets(void) {
 }
 
 // PS/2 keyboard interrupt handler
-static void keyboard_handler(registers_t regs) {
+static void keyboard_handler(registers_t *regs) {
     unsigned char scancode = inb(0x60);
 
     // Ignore key releases

@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include "common.h"
 
-// A few defines to make life a little easier
+// Defines for IRQ numbers
 #define IRQ0 32
 #define IRQ1 33
 #define IRQ2 34
@@ -28,6 +28,7 @@
 #define IRQ14 46
 #define IRQ15 47
 
+// Represents the register state saved on the stack during an interrupt.
 typedef struct registers
 {
    uint32_t ds;                  // Data segment selector
@@ -36,10 +37,10 @@ typedef struct registers
    uint32_t eip, cs, eflags, useresp, ss; // Pushed by the processor automatically.
 } registers_t; 
 
-// Enables registration of callbacks for interrupts or IRQs.
-// For IRQs, to ease confusion, use the #defines above as the
-// first parameter.
-typedef void (*isr_t)(registers_t);
+// A handler function now takes a pointer to the register frame.
+// This allows the handler (e.g., the scheduler) to modify the
+// execution context that will be restored after the interrupt.
+typedef void (*isr_t)(registers_t*);
 void register_interrupt_handler(uint8_t n, isr_t handler); 
 
 #endif

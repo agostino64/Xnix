@@ -209,7 +209,7 @@ page_t *get_page(uint32_t address, int make, page_directory_t *dir)
 }
 
 
-void page_fault(registers_t regs)
+void page_fault(registers_t *regs)
 {
     __asm__ __volatile__ ("cli");
     
@@ -219,10 +219,10 @@ void page_fault(registers_t regs)
     __asm__ __volatile__("mov %%cr2, %0" : "=r" (faulting_address));
     
     // The error code gives us details of what happened.
-    int present   = !(regs.err_code & 0x1); // Page not present
-    int rw = regs.err_code & 0x2;           // Write operation?
-    int us = regs.err_code & 0x4;           // Processor was in user-mode?
-    int reserved = regs.err_code & 0x8;     // Overwritten CPU-reserved bits of page entry?
+    int present   = !(regs->err_code & 0x1); // Page not present
+    int rw = regs->err_code & 0x2;           // Write operation?
+    int us = regs->err_code & 0x4;           // Processor was in user-mode?
+    int reserved = regs->err_code & 0x8;     // Overwritten CPU-reserved bits of page entry?
     //int id = regs.err_code & 0x10;          // Caused by an instruction fetch?
     
     uint32_t cr2;
@@ -234,9 +234,9 @@ void page_fault(registers_t regs)
     if (rw) {printk("read-only ");}
     if (us) {printk("user-mode ");}
     if (reserved) {printk("reserved ");}
-    printk("\b) at 0x%x - EIP: %x \n",faulting_address,regs.eip);
+    printk("\b) at 0x%x - EIP: %x \n",faulting_address,regs->eip);
     
-    if(!strcmp((char*)regs.eip,(char*)cr2))
+    if(!strcmp((char*)regs->eip,(char*)cr2))
     	printk("Page fault caused by executing unpaged memory\n");
     else
     	printk("Page fault caused by reading unpaged memory\n");
@@ -245,7 +245,7 @@ void page_fault(registers_t regs)
     if(current_directory != kernel_directory)
     {
     	//printk("Killing task %d\n",getpid());
-    	panic(&regs, "Task fault");
+    	panic(regs, "Task fault");
     }
     //else
     	//PANIC("Page fault");
@@ -358,21 +358,4 @@ void virtual_map_pages(long addr, long size, int rw, int user)
         i += 0x1000;
     }
     return;
-}
-
-void* alloc_task_stack_page(void) {
-    static uint32_t next_stack_address = ADDR_PAGE_TASK;
-
-    page_t *page = get_page(next_stack_address, 1, current_directory);
-    if (!page) {
-        KLOG(LOG_LEVEL_ERROR, "get_page failed for task stack at 0x%X", next_stack_address);
-        return 0;
-    }
-
-    alloc_frame(page, 0, 1); // is_kernel=0 (user), is_writeable=1
-
-    void* result = (void*)next_stack_address;
-    next_stack_address += 0x1000; // Go to the next page
-    KLOG(LOG_LEVEL_INFO, "[Paging] Allocated task stack page at %p\n", result);
-    return result;
 }

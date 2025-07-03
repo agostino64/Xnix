@@ -66,7 +66,7 @@ page_t *get_page(uint32_t address, int make, page_directory_t *dir);
 /**
    Handler for page faults.
 **/
-void page_fault(registers_t regs);
+void page_fault(registers_t *regs);
 
 /**
    Makes a copy of a page directory.

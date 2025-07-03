@@ -18,7 +18,6 @@
 #include <xnix/heap.h>
 #include <xnix/log.h>
 #include <xnix/initrd.h>
-#include <xnix/task.h>
 #include <xnix/string.h>
 
 #define INITIAL_SIZE 10
@@ -149,7 +148,7 @@ void cmd_init(void)
 
 /**
  * Shell main task function.
- * Runs as a cooperative task and yields after each command.
+ * Runs as a preemptive task.
  */
 void shell_task(void) {
     uint32_t dir_buf_size = INITIAL_SIZE;
@@ -190,7 +189,6 @@ void shell_task(void) {
     // Main shell loop
     while (1) {
         printk("%s:> ", dir);
-
         // Read line (blocks internally)
         gets();
         char *input = get_input_buffer();
@@ -204,7 +202,6 @@ void shell_task(void) {
                 current_size = input_len;
             } else {
                 KLOG(LOG_LEVEL_ERROR, "[Shell] Could not expand cmd buffer\n");
-                yield();
                 continue;
             }
         }
@@ -214,9 +211,6 @@ void shell_task(void) {
         if (cmd[0] != '\0') {
             cmd_init();
         }
-
-        // Yield to allow other tasks
-        yield();
     }
 }
 

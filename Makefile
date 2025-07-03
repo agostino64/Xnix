@@ -23,7 +23,7 @@ BUILD_NUM_FILE  := .build_number
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -std=c11 -nostdlib -ffreestanding \
+CFLAGS += -nostdlib -ffreestanding \
  -fomit-frame-pointer -I./include -fno-stack-protector 
 LDFLAGS += -T linker.ld
 ASFLAGS += -f elf
@@ -75,7 +75,7 @@ all: Image initrd
 
 FORCE:
 
-$(BUILD_INFO):
+$(BUILD_INFO): FORCE
 	@echo "Generating system info header"
 	@if [ ! -f $(BUILD_NUM_FILE) ]; then \
 		echo 0 > $(BUILD_NUM_FILE); \
