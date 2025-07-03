@@ -89,9 +89,6 @@ IRQ  13,    45
 IRQ  14,    46
 IRQ  15,    47
 
-; --- Software Interrupt for yield() ---
-ISR_NOERRCODE 128
-
 ; Common ISR Stub
 isr_common_stub:
    pusha                    ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
