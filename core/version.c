@@ -58,7 +58,7 @@
     #define BUILD_USER "unknown"
 #endif
 
-#if IS_DEBUG
+#if DEBUG
   #define BUILD_TYPE "debug"
 #else
   #define BUILD_TYPE "release"
