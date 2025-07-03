@@ -40,7 +40,6 @@ void help_func(char *args)
     printk(" reboot    Reboot system\n");
     printk(" shutdown  Power off system\n");
     printk(" cpuinfo   Display CPU info\n");
-    printk(" xnix      Show ASCII logo\n");
     printk(" mem       Show memory info\n");
     printk(" ls        List files in RAMFS\n");
     printk(" cat       Read files from RAMFS\n");
