@@ -19,6 +19,8 @@
 #include <xnix/task.h>
 #include <xnix/cpu.h>    // for inb(), outb()
 
+#undef DEBUG
+
 // Modifier flags
 static volatile int shift_flag = 0;
 static volatile int caps_flag  = 0;
@@ -101,23 +103,31 @@ static void keyboard_handler(registers_t *regs) {
         caps_flag = !caps_flag;
         kbd_led_state = (kbd_led_state & ~0x04) | (caps_flag ? 0x04 : 0);
         update_leds();
+        #ifdef DEBUG
         KLOG(LOG_LEVEL_DEBUG, "Caps Lock %s\n", caps_flag ? "ON" : "OFF");
+        #endif
         return;
     }
     if (scancode == SC_NUMLOCK) {
         kbd_led_state ^= 0x02;
         update_leds();
+        #ifdef DEBUG
         KLOG(LOG_LEVEL_DEBUG, "Num Lock toggled\n");
+        #endif
         return;
     }
     if (scancode == SC_SCROLLOCK) {
         kbd_led_state ^= 0x01;
         update_leds();
+        #ifdef DEBUG
         KLOG(LOG_LEVEL_DEBUG, "Scroll Lock toggled\n");
+        #endif
         return;
     }
     if (scancode == SC_F12) {
+        #ifdef DEBUG
         KLOG(LOG_LEVEL_INFO, "F12 pressed\n");
+        #endif
         return;
     }
 
@@ -139,7 +149,9 @@ static void keyboard_handler(registers_t *regs) {
     if (key == '\n') {
         // On first Enter, capture buffer (no full-line echo)
         if (gets_flag == 0) {
+            #ifdef DEBUG
             KLOG(LOG_LEVEL_DEBUG, "Enter key pressed, capturing input buffer\n");
+            #endif
             do_gets();
         }
         gets_flag++;
@@ -156,15 +168,19 @@ static void keyboard_handler(registers_t *regs) {
             put('\b');
             put(' ');
             put('\b');
+            #ifdef DEBUG
             KLOG(LOG_LEVEL_DEBUG, "Backspace: removed one character, new count = %d\n", kb_count);
+            #endif
         }
     }
     else {
         if (kb_count < KB_BUFFER_SIZE - 1) {
             buffer[kb_count++] = key;
             put(key);  // echo the character
+            #ifdef DEBUG
             KLOG(LOG_LEVEL_DEBUG, "Key pressed: '%c' (scancode=0x%02x), count=%d\n",
                  key, scancode, kb_count);
+            #endif
         }
     }
 }
