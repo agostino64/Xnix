@@ -62,7 +62,7 @@ SOURCES = core/boot.o \
 	  core/panic.o \
 	  core/task.o \
 	  core/memory.o \
-          core/string.o \
+      core/string.o \
 	  core/switch_task.o \
 	  core/version.o \
 	  drivers/timer.o \
@@ -129,3 +129,6 @@ initrd: generate_initrd.c Image
 	@echo "Generating initialRamDisk ..."
 	gcc -Wall generate_initrd.c -o generate_initrd.o
 	./generate_initrd.o $(FSPATH) $(FILES)
+
+run: Image initrd.img
+	qemu-system-i386 -kernel Image -initrd initrd.img -serial stdio
