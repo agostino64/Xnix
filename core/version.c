@@ -21,7 +21,7 @@
 /** @def XNIX_VERSION
  *  Kernel version number string.
  */
-#define XNIX_VERSION "1.1.2-3"
+#define XNIX_VERSION "1.1.2-4"
 
 /** @def BUILD_DATE
  *  Date of compilation
