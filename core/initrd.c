@@ -182,6 +182,8 @@ int list_initrd(void)  // section 8
 // Use heap for reduce memory usage
 int read_initrd(char *file)
 {
+    #define INITIAL_SIZE 256 // Initial buffer size
+    #define MAX_BUFFER_SIZE 1024 // Maximum buffer size to prevent excessive memory allocation
     int i = 0;
     struct dirent *node = 0;
     static uint32_t mem_size = 264;
@@ -209,21 +211,40 @@ int read_initrd(char *file)
         {
             KLOG(LOG_LEVEL_DEBUG, "node->name and %s match.\n", file);
 
+            uint32_t file_len = fsnode->length;
+            if (file_len + 1 > mem_size) {
+                // not expanding buffer beyond 1KB
+                if (mem_size > MAX_BUFFER_SIZE) {
+                    KLOG(LOG_LEVEL_ERROR, "ERROR: File '%s' is too large (%u bytes), cannot read into buffer\n", file, file_len);
+                    kfree(buffer);
+                    buffer = NULL;
+                    mem_size = INITIAL_SIZE; // Reset buffer size
+                    KLOG(LOG_LEVEL_DEBUG, "Buffer reset to %u bytes\n", mem_size);
+                    return 1; // Avoid excessive memory allocation
+                }
+
+                char *new_buffer = (char*)krealloc(buffer, mem_size, file_len + 1);
+                if (new_buffer) {
+                    buffer = new_buffer;
+                    mem_size = file_len + 1;
+                } else {
+                    KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
+                    return 1;
+                }
+            }
+
             uint32_t size = read_fs(fsnode, 0, mem_size, (uint8_t*)buffer);
             for (uint32_t j = 0; j < size; j++)
                 put(buffer[j]);
 
-            // Optionally null-terminate or expand
-            uint32_t len = size + 1;
-            char *new_buffer = (char*)krealloc(buffer, mem_size, len);
-            if (new_buffer)
-            {
-                buffer = new_buffer;
-                mem_size = len;
-            }
-            else
-            {
-                KLOG(LOG_LEVEL_ERROR, "ERROR: Could not expand buffer\n");
+            // Shrink buffer if it grew too much
+            if (mem_size > INITIAL_SIZE * 2) {
+                char *shrunk_buffer = (char*)krealloc(buffer, mem_size, 264);
+                if (shrunk_buffer) {
+                    buffer = shrunk_buffer;
+                    mem_size = INITIAL_SIZE;
+                    KLOG(LOG_LEVEL_DEBUG, "[initrd] Shrunk buffer to %s bytes\n", mem_size);
+                }
             }
 
             return 0; // Success
