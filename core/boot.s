@@ -32,7 +32,6 @@ mboot:
   dd  _start                    ; Kernel entry point (initial EIP).
 
 [GLOBAL _start]                  ; Kernel entry point.
-[EXTERN clear_screen]
 [EXTERN start_kernel]           ; This is the entry point of our C code
 
 _start:    
@@ -44,9 +43,25 @@ _start:
     mov    esp, eax
     
     ;─── pass multiboot parameters ───────────────────────────────────────────
-    ;  On entry: EBX = multiboot magic; EAX (undefined) 
-    ;  We want: first arg = mboot_ptr, second arg = initial_stack
-    push   ebx                 ; [esp] ← magic (we'll drop it)
-    push   esp                 ; [esp] ← initial_stack (after pushes!)
-    call   start_kernel        ; C: start_kernel(mboot_ptr, initial_stack)
-    jmp $                       ; hang if it ever returns
+    push ebx      ; Pushes mboot_ptr (the right-most argument)
+    push esp      ; Pushes initial_stack (the left-most argument)
+
+    push   ret_addr
+    jmp    start_kernel        ; C: start_kernel(mboot_ptr, initial_stack)
+ret_addr:
+    ;       |                  |
+    ;       +------------------+
+    ; esp → |   ret_addr       |  (Return address for start_kernel)
+    ;      +------------------+
+    ; esp+4 | initial_stack    |  (Argument 1)
+    ;       +------------------+
+    ; esp+8 | mboot_ptr        |  (Argument 2)
+    ;       +------------------+
+    ;       | ...              |
+    ; 
+    ; Clean up the 2 arguments (4 bytes each) pushed to the stack
+    add esp, 8
+    
+    ; Now the stack is restored to its state before the pushes.
+    ; Execution can continue, or more likely, halt.
+    hlt
