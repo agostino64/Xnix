@@ -26,6 +26,15 @@
 extern uint32_t placement_address;
 uint32_t initial_esp;
 
+// from core/version.c
+extern const char *get_xnix_version(void);
+extern const char *get_xnix_build_date(void);
+extern const char *get_xnix_build_time(void);
+
+// Function prototypes
+void start_kernel_core(struct multiboot *mboot_ptr);
+void kernel_loop(void);
+
 /**
  * start_kernel - Entry point for the Xnix kernel after boot.
  *
@@ -40,20 +49,36 @@ uint32_t initial_esp;
  */
 void start_kernel(uint32_t initial_stack, struct multiboot *mboot_ptr)
 {
-    clear_screen();
-    printk("Xnix Booting...\n\n");
     initial_esp = initial_stack;
+    
+    start_kernel_core(mboot_ptr);
+
+    clear_screen();
+
+    printk("Xnix Kernel %s started successfully.\n\n", get_xnix_version());
+    KLOG(LOG_LEVEL_INFO, "Xnix Kernel %s started successfully.\n", get_xnix_version());
+    KLOG(LOG_LEVEL_INFO, "Build date: %s at %s\n", get_xnix_build_date(), get_xnix_build_time());
+
+    kernel_loop();
+}
+
+void start_kernel_core(struct multiboot *mboot_ptr)
+{
+    printk("Xnix Booting...\n\n");
 
     // Initialize core components
+    printk("Initializing serial driver...");
     serial_init();
-    KLOG(LOG_LEVEL_INFO, "Initializing serial driver...\n");
-    
+    printk("OK.\n");
+
+    printk("Initializing GDT/IDT...");
     init_descriptor_tables();
-    KLOG(LOG_LEVEL_INFO, "Initializing GDT/IDT...\n");
+    printk("OK.\n");
 
     // Enable interrupts early for timer and keyboard
-    KLOG(LOG_LEVEL_INFO, "Enabling interrupts...\n");
+    printk("Enabling interrupts...");
     sti();
+    printk("enabled.\n");
 
     // Verify and locate initrd
     if (mboot_ptr->mods_count == 0) {
@@ -64,41 +89,44 @@ void start_kernel(uint32_t initial_stack, struct multiboot *mboot_ptr)
     placement_address   = initrd_end;
 
     // Initialize Paging & Heap
-    KLOG(LOG_LEVEL_INFO, "Initializing paging...\n");
+    printk("Initializing paging...");
     uint32_t mem_bytes = (mboot_ptr->mem_lower + mboot_ptr->mem_upper) * 1024;
     init_paging(mem_bytes);
+    printk("OK.\n");
     KLOG(LOG_LEVEL_DEBUG, "Paging initialized (%d MB)\n", mem_bytes / (1024 * 1024));
 
     // Load Filesystem
-    KLOG(LOG_LEVEL_INFO, "Loading initrd...\n");
+    printk("Loading initrd...");
     fs_root = initialise_initrd(initrd_location);
+    printk("OK.\n");
+    KLOG(LOG_LEVEL_DEBUG, "Initrd loaded at %p\n", fs_root);
 
     // Initialize Drivers
-    KLOG(LOG_LEVEL_INFO, "Initializing timer driver...\n");
+    printk("Initializing timer driver...");
     init_timer(); // Note: init_timer is now separate from serial_init
+    printk("OK.\n");
 
-    KLOG(LOG_LEVEL_INFO, "Initializing keyboard driver...\n");
+    printk("Initializing keyboard driver...");
     init_keyboard();
+    printk("OK.\n");
 
     // Launch the preemptive scheduler
-    KLOG(LOG_LEVEL_INFO, "Launching preemptive multitasking...\n");
+    printk("Launching preemptive multitasking...");
     init_tasking();
-    
-    // The scheduler is now running. The first yield will switch to the shell.
-    //yield();
-    
-    // This code will only run when the scheduler gives control back to the main task.
-    KLOG(LOG_LEVEL_DEBUG, "Returned to main kernel task.\n");
-    
-    for (int i=0;i<10;i++)
-      KLOG(LOG_LEVEL_DEBUG, "We are on main task.\n");
-    
+    printk("OK.\n");
+
+    KLOG(LOG_LEVEL_DEBUG, "core components initialized.\n");
+}
+
+void kernel_loop(void)
+{
     // Nothing to do... sleep
-    for (;;) { __asm__ __volatile__("hlt"); }
+    for (;;) {
+      halt();
+     }
 }
 
 void print_task(void)
 {
-  KLOG(LOG_LEVEL_INFO, "Hello from print task!\n");
+    KLOG(LOG_LEVEL_INFO, "Hello from print task!\n");
 }
-
