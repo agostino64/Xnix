@@ -20,7 +20,7 @@
 #include <xnix/initrd.h>
 #include <xnix/string.h>
 
-#define INITIAL_SIZE 10
+#define INITIAL_SIZE 256
 
 // Shell buffer and state
 static char *cmd = NULL;
@@ -30,30 +30,78 @@ static uint32_t current_size = INITIAL_SIZE;
 // External CPU check
 extern int _cpuid_support(void);
 
-// ================== Command Functions ==================
+/**
+ * Command function pointer type.
+ */
+typedef void (*cmd_func_ptr)(char *args);
 
+// Definitions on top
+void help_func(char *args);
+void version_func(char *args);
+void cpuinfo_func(char *args);
+void meminfo_func(char *args);
+void list_fs(char *args);
+void cat_fs(char *args);
+void clear_screen_wrapper(char *args);
+void reboot_wrapper(char *args);
+void shutdown_wrapper(char *args);
+
+
+/**
+ * Structure for shell command registration.
+ */
+typedef struct {
+    cmd_func_ptr func;      ///< Pointer to the command function
+    const char *alias;     ///< Command alias
+    const char *help;      ///< Short description of the command
+    const char *usage;     ///< Usage information for the command
+} shellfunction;
+
+#define CMDENTRY(fptr, alias, help, usage) { fptr, alias, help, usage }
+
+// Registering command functions (declared before help_func)
+Command CMDs[] = {
+    CMDENTRY(help_func,            "help",     "Shows command list", NULL),
+    CMDENTRY(version_func,         "version",  "Show kernel version and banner", NULL),
+    CMDENTRY(clear_screen_wrapper, "clear",    "Clears the screen", NULL),
+    CMDENTRY(reboot_wrapper,       "reboot",   "Reboot the system", NULL),
+    CMDENTRY(shutdown_wrapper,     "shutdown", "Power off the system", NULL),
+    CMDENTRY(cpuinfo_func,         "cpuinfo",  "Display CPU information", NULL),
+    CMDENTRY(meminfo_func,         "mem",      "Show memory usage info", NULL),
+    CMDENTRY(list_fs,              "ls",       "List files in RAMFS", NULL),
+    CMDENTRY(cat_fs,               "cat",      "Display contents of a file in RAMFS", "cat <filename>")
+};
+
+// Wrappers for functions without arguments
+void clear_screen_wrapper(char *args) { clear_screen(); }
+void reboot_wrapper(char *args) { reboot(); }
+void shutdown_wrapper(char *args) { shutdown(); }
+
+// ================== Command Functions ==================
 void help_func(char *args)
 {
-    printk("Commands:\n");
-    printk(" version   Show version\n");
-    printk(" clear     Clear screen\n");
-    printk(" reboot    Reboot system\n");
-    printk(" shutdown  Power off system\n");
-    printk(" cpuinfo   Display CPU info\n");
-    printk(" mem       Show memory info\n");
-    printk(" ls        List files in RAMFS\n");
-    printk(" cat       Read files from RAMFS\n");
-    printk("\nCopyright (C) 2023, 2025 Agustin Gutierrez (agostino64)\n");
+    if (!args || args[0] == '\0') {
+        printk("\nList of commands:\n");
+        for (int i = 0; i < (int)(sizeof(CMDs)/sizeof(Command)); i++) {
+            if (CMDs[i].usage == NULL)
+                printk("%d %s - %s\n", i, CMDs[i].alias, CMDs[i].help);
+            else
+                printk("%d %s - %s\n\tUsage: %s\n", i, CMDs[i].alias, CMDs[i].help, CMDs[i].usage);
+        }
+    } else {
+        printk("Invalid option: \"%s\"\n", args);
+    }
 }
 
 extern const char xnix_proc_banner[];
 
+// ================== Version Function ==================
 void version_func(char *args)
 {
     printk("%s\n", xnix_proc_banner);
 }
 
-
+// ================== CPU and Memory Info Functions ==================
 void cpuinfo_func(char *args)
 {
     if (_cpuid_support())
@@ -62,12 +110,14 @@ void cpuinfo_func(char *args)
         printk("cpuid extension is not supported by the CPU.\n");
 }
 
+// ================== Memory Info Function ==================
 void meminfo_func(char *args)
 {
     printk("Kernel memory usage: %u bytes / %u kB\n", get_memory_usage(), (get_memory_usage()/1024));
     printk("Shell buffer size: %u bytes\n", current_size);
 }
 
+// ================== File System Functions ==================
 void list_fs(char *args)
 {
     list_initrd();
@@ -114,7 +164,7 @@ void exec_cmd(const char *input, Command *cmds, int num_cmds)
 
     for (int i = 0; i < num_cmds; i++)
     {
-        if (strcmp(cmd_name, (char *)cmds[i].cmd) == 0)
+        if (strcmp(cmd_name, (char *)cmds[i].alias) == 0)
         {
             cmds[i].func(cmd_args);
             return;
@@ -129,20 +179,8 @@ void exec_cmd(const char *input, Command *cmds, int num_cmds)
  */
 void cmd_init(void)
 {
-    Command cmds[] = {
-        { "help", help_func },
-        { "clear", (cmd_func_t)clear_screen },
-        { "version", version_func },
-        { "reboot", (cmd_func_t)reboot },
-        { "shutdown", (cmd_func_t)shutdown },
-        { "cpuinfo", cpuinfo_func },
-        { "mem", meminfo_func },
-        { "ls", list_fs },
-        { "cat", cat_fs }
-    };
-
     if (cmd != NULL)
-        exec_cmd(cmd, cmds, sizeof(cmds) / sizeof(cmds[0]));
+        exec_cmd(cmd, CMDs, sizeof(CMDs) / sizeof(CMDs[0]));
 }
 
 /**
