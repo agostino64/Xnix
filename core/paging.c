@@ -167,8 +167,8 @@ void init_paging(unsigned int memorysz)
 
     // Initialise the kernel heap.
     kheap = create_heap(KHEAP_START, KHEAP_START+KHEAP_INITIAL_SIZE, KHEAP_START+KHEAP_MAX_ADDRESS, 0, 0);
-    expand(0x400000, kheap); // Allocate some more space
-    
+    // The heap will grow on demand, we do not expand here
+    expand(0x400000, kheap);
     current_directory = clone_directory(kernel_directory);
     switch_page_directory(current_directory);
 }
@@ -177,7 +177,7 @@ void switch_page_directory(page_directory_t *dir)
 {
     current_directory = dir;
     __asm__ __volatile__("mov %0, %%cr3":: "r"(dir->physicalAddr));
-    uint32_t cr0;
+    uint32_t cr0; 
     __asm__ __volatile__("mov %%cr0, %0": "=r"(cr0));
     cr0 |= 0x80000000; // Enable paging!
     __asm__ __volatile__("mov %0, %%cr0":: "r"(cr0));
