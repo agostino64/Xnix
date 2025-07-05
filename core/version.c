@@ -80,3 +80,18 @@ const char xnix_proc_banner[] =
     XSTR(BUILD_COMPILER_MINOR) "."
     XSTR(BUILD_COMPILER_PATCH)
     " - " BUILD_USER "@" BUILD_OS ")";
+
+const char *get_xnix_version(void)
+{
+    return XNIX_VERSION;
+}
+
+const char *get_xnix_build_date(void)
+{
+    return BUILD_DATE;
+}
+
+const char *get_xnix_build_time(void)
+{
+    return BUILD_TIME;
+}
