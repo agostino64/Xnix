@@ -186,11 +186,17 @@ void shell_task(void) {
     }
 
     // Main shell loop
+    int prompted = 0;
     while (1) {
-        printk("%s:> ", dir);
-        // Read line (blocks internally)
-        gets();
         char *input = get_input_buffer();
+        if (!prompted) {
+            //KLOG(LOG_LEVEL_DEBUG, "[Shell] Prompting for input in directory: %s\n", dir);
+            printk("%s:> ", dir);
+            prompted = 1;
+        }
+        gets();
+        //KLOG(LOG_LEVEL_DEBUG, "[Shell] Input received: %s\n", input);
+        input = get_input_buffer();
         uint32_t input_len = strlen(input) + 1;
 
         // Resize cmd buffer if needed
@@ -209,6 +215,20 @@ void shell_task(void) {
         strcpy(cmd, input);
         if (cmd[0] != '\0') {
             cmd_init();
+            // Clears the input buffer for the next command
+            cmd[0] = '\0';
+            input[0] = '\0';
+            prompted = 0; // <-- Allows you to display the prompt again
+
+            // Shrink cmd buffer if it grew too much
+            if (current_size > INITIAL_SIZE * 2) {
+                char *shrunk_cmd = (char*)krealloc(cmd, current_size, INITIAL_SIZE);
+                if (shrunk_cmd) {
+                    cmd = shrunk_cmd;
+                    current_size = INITIAL_SIZE;
+                    KLOG(LOG_LEVEL_DEBUG, "[Shell] Shrunk cmd buffer to INITIAL_SIZE\n");
+                }
+            }
         }
     }
 }
