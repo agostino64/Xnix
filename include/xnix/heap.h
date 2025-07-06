@@ -11,13 +11,13 @@
 #include "paging.h"
 #include "ordered_array.h"
 
-#define KHEAP_START         0x50000000
-#define KHEAP_INITIAL_SIZE  0x100000
-#define KHEAP_MAX_ADDRESS 0xFFFF000
+#define KHEAP_START         0x50000000 // Start address of the kernel heap
+#define KHEAP_INITIAL_SIZE  0x100000 // 1MB initial size
+#define KHEAP_MAX_ADDRESS 0xFFFF000 // 4GB - 1MB, maximum address for the heap
 
-#define HEAP_INDEX_SIZE   0x20000
-#define HEAP_MAGIC        0xDEADBEEF
-#define HEAP_MIN_SIZE     0x70000
+#define HEAP_INDEX_SIZE   0x20000 // Size of the ordered array index for heap management
+#define HEAP_MAGIC        0xDEADBEEF // Magic number to identify heap blocks
+#define HEAP_MIN_SIZE     0x70000 // Minimum size of the heap, used for initial allocation
 
 /**
    Size information for a hole/block
