@@ -55,7 +55,7 @@ void start_kernel(uint32_t initial_stack, struct multiboot *mboot_ptr)
 
     clear_screen();
 
-    printk("Xnix Kernel %s started successfully.\n\n", get_xnix_version());
+    printk("Xnix Kernel Version %s\n\n", get_xnix_version());
     KLOG(LOG_LEVEL_INFO, "Xnix Kernel %s started successfully.\n", get_xnix_version());
     KLOG(LOG_LEVEL_INFO, "Build date: %s at %s\n", get_xnix_build_date(), get_xnix_build_time());
 
