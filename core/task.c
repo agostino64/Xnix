@@ -106,7 +106,8 @@ int create_task(Task *parent, Task *new_task, void (*entry)(void), page_director
         KLOG(LOG_LEVEL_ERROR, "[Tasking] createTask received one or more null pointers.\n");
         return -1;
     }
-
+    
+    // Allocate a 4KB stack for the new task from the kernel heap.
     uint32_t stack = (uint32_t)kmalloc(TASK_STACK_SIZE);
     if (!stack) {
         KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to allocate stack for new task ID %d.\n", next_task_id);
@@ -124,8 +125,10 @@ int create_task(Task *parent, Task *new_task, void (*entry)(void), page_director
     new_task->regs.eip = (uint32_t)entry;
     new_task->page_directory = page_dir;
 
-    // Allocate a 4KB stack for the new task from the kernel heap.
-    new_task->regs.esp = (uint32_t)kmalloc(4096) + 4096;
+    // ** BUG FIX **: Point ESP to the top of the allocated stack.
+    // The original code allocated 'stack' and then leaked it by calling kmalloc again.
+    // This now correctly uses the 'stack' pointer.
+    new_task->regs.esp = stack + TASK_STACK_SIZE;
     new_task->regs.ebp = new_task->regs.esp;
 
     // Insert the new task into the circular list after the parent.
@@ -164,9 +167,9 @@ void init_tasking(void)
         return;
     }
     
-    // 2. Create the serial task with its own address space.
+    // 3. Create the serial task with its own address space.
     page_directory_t *print_page_dir = clone_directory(kernel_directory);
-    if (!shell_page_dir) {
+    if (!print_page_dir) {
         KLOG(LOG_LEVEL_ERROR, "[Tasking] Failed to clone page directory for serial port task.\n");
         // In a real scenario, this would be a fatal kernel panic.
         return;
@@ -176,7 +179,7 @@ void init_tasking(void)
         return;
     }
 
-    // 3. Set the main task as the first running task.
+    // 4. Set the main task as the first running task.
     runningTask = &mainTask;
     KLOG(LOG_LEVEL_INFO, "[Tasking] System initialized. Starting with task ID %d.\n", runningTask->id);
 
