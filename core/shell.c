@@ -19,6 +19,7 @@
 #include <xnix/log.h>
 #include <xnix/initrd.h>
 #include <xnix/string.h>
+#include "../userspace/showcase.h"
 
 #define INITIAL_SIZE 256
 
@@ -69,7 +70,8 @@ Command CMDs[] = {
     CMDENTRY(cpuinfo_func,         "cpuinfo",  "Display CPU information", NULL),
     CMDENTRY(meminfo_func,         "mem",      "Show memory usage info", NULL),
     CMDENTRY(list_fs,              "ls",       "List files in RAMFS", NULL),
-    CMDENTRY(cat_fs,               "cat",      "Display contents of a file in RAMFS", "cat <filename>")
+    CMDENTRY(cat_fs,               "cat",      "Display contents of a file in RAMFS", "cat <filename>"),
+    CMDENTRY(entry_func,           "showcase", "Show case of USERSPACE functions.", NULL)
 };
 
 // Wrappers for functions without arguments

@@ -15,6 +15,9 @@ void clear_screen(void);
 // Output a null-terminated ASCII string to the monitor.
 void write(const char *c);
 
+// Print with variable handling (still differs from printk)
+void vprintk(const char* fmt, va_list args);
+
 // Print with suppport for arguments
 void printk(const char* fmt, ...);
 
