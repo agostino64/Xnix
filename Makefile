@@ -11,34 +11,34 @@
 #
 
 DEBUG      	:= 1
-AS         	:= nasm
-CC         	:= i686-elf/bin/i686-elf-gcc
-LD         	:= i686-elf/bin/i686-elf-ld
 OUT        	:= Image
 FSPATH     	:= fs_files/
 BUILD_INFO 	:= build_info.h
 BUILD_NUM_FILE  := .build_number
 
+TARGET_CFLAGS += -ffreestanding -mno-red-zone \
+	-I./include -fno-stack-protector  \
+	-mno-sse -mno-sse2 -mno-mmx -msoft-float
+TARGET_LDFLAGS += -T linker.ld -nostdlib
+TARGET_LINKFLAGS += -f elf
+TARGET_LIBS += -lgcc
+
 # Use 'find' to get all the files and folders (recursive) in the directory
 # Use 'sed' to remove FSPATH from returned paths (and make them relative)
 FILES = $(shell find $(FSPATH) -mindepth 1 | sed 's|^$(FSPATH)||')
 
-CFLAGS += -nostdlib -ffreestanding \
- -fomit-frame-pointer -I./include -fno-stack-protector 
-LDFLAGS += -T linker.ld
-ASFLAGS += -f elf
-
 ifeq ($(DEBUG),1)
-    CFLAGS  += -DDEBUG -DLOG_LEVEL=LOG_LEVEL_DEBUG -g -Wall -Wstrict-prototypes
-    ASFLAGS += -F dwarf -g
+    TARGET_CFLAGS  += -DDEBUG -DLOG_LEVEL=LOG_LEVEL_DEBUG \
+    	-g -Wall -O0 -Wextra -Wstrict-prototypes -fno-omit-frame-pointer
+    TARGET_LINKFLAGS += -F dwarf -g
 endif
 
 ifeq ($(DEBUG),0)
-    CFLAGS  += -O
+    TARGET_CFLAGS  += -O -fomit-frame-pointer
 endif
 
 ifeq ($(CC),clang)
-    CFLAGS += -mno-sse -mno-mmx -msoft-float
+    TARGET_CFLAGS +=
 endif
 
 SOURCES = core/boot.o \
@@ -62,16 +62,20 @@ SOURCES = core/boot.o \
 	  core/panic.o \
 	  core/task.o \
 	  core/memory.o \
-      core/string.o \
+      	  core/string.o \
 	  core/switch_task.o \
 	  core/version.o \
 	  drivers/timer.o \
 	  drivers/keyb.o \
 	  drivers/serial.o
 
-all: Image initrd
+include build_scripts/config.mk
 
 .PHONY: $(BUILD_INFO) FORCE
+
+all: Image initrd
+
+include build_scripts/toolchain.mk
 
 FORCE:
 
@@ -93,18 +97,19 @@ $(BUILD_INFO): FORCE
 	rm -f $@.tmp
 
 Image: $(SOURCES)
-	@$(LD) $(LDFLAGS) -o $(OUT) $(SOURCES)
-	@echo ' '
-	@echo $(OUT)
+	@echo "  LD    $(OUT)"
+	@$(TARGET_LD) $(TARGET_LDFLAGS) -o $(OUT) $(SOURCES) $(TARGET_LIBS)
 	
 core/version.o: core/version.c FORCE
-	$(CC) $(CFLAGS) -c $< -o $@
+	@$(TARGET_CC) $(TARGET_CFLAGS) -c $< -o $@
 	
 %.o: %.c | $(BUILD_INFO)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo "  CC    $<"
+	@$(TARGET_CC) $(TARGET_CFLAGS) -c $< -o $@
 
 %.o: %.s
-	$(AS) $(ASFLAGS) $< -o $@
+	@echo "  AS    $<"
+	@$(TARGET_ASM) $(TARGET_LINKFLAGS) $< -o $@
 
 clean:
 	rm -f core/*.o drivers/*.o *.o *.img $(OUT) generate_initrd.o initrd.img $(BUILD_INFO) $(BUILD_NUM_FILE)
